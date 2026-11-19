@@ -1,0 +1,3660 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GlowMax AI — Chấm Điểm OVR Khuôn Mặt 2 Góc & 48 Chỉ Số</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- MediaPipe FaceMesh (Optional 468-Landmark Overlay) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body {
+      background-color: #050507;
+      color: #f8fafc;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+
+    .bg-ambient {
+      background-color: #050507;
+      background-image:
+        radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.35), transparent),
+        radial-gradient(1px 1px at 28% 64%, rgba(251, 146, 60, 0.4), transparent),
+        radial-gradient(1.5px 1.5px at 44% 12%, rgba(255, 255, 255, 0.28), transparent),
+        radial-gradient(1px 1px at 67% 32%, rgba(253, 186, 116, 0.35), transparent),
+        radial-gradient(1.5px 1.5px at 82% 74%, rgba(255, 255, 255, 0.25), transparent),
+        radial-gradient(1px 1px at 91% 22%, rgba(249, 115, 22, 0.4), transparent),
+        radial-gradient(circle at 18% 12%, rgba(249, 115, 22, 0.14), transparent 40%),
+        radial-gradient(circle at 84% 24%, rgba(234, 88, 12, 0.11), transparent 42%),
+        radial-gradient(circle at 50% 92%, rgba(251, 191, 36, 0.07), transparent 48%);
+    }
+
+    .glass-panel {
+      background: rgba(13, 12, 17, 0.78);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(249, 115, 22, 0.14);
+      box-shadow: 0 22px 55px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .cosmic-orbit {
+      border: 1px dashed rgba(249, 115, 22, 0.32);
+      box-shadow: 0 0 28px rgba(249, 115, 22, 0.12);
+    }
+
+    .laser-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #ff6b00, #fbbf24, transparent);
+      box-shadow: 0 0 18px #ff6b00;
+      animation: scanSweep 2.2s ease-in-out infinite;
+    }
+
+    @keyframes scanSweep {
+      0% { top: 4%; opacity: 0.3; }
+      50% { top: 94%; opacity: 1; }
+      100% { top: 4%; opacity: 0.3; }
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #050507;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27222b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ea580c;
+    }
+  </style>
+</head>
+<body class="bg-ambient min-h-screen flex flex-col selection:bg-orange-500 selection:text-black">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="sticky top-0 z-40 border-b border-orange-500/15 bg-[#07070a]/85 backdrop-blur-xl">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/25">
+          <svg class="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-black text-base sm:text-lg tracking-tight text-white">GlowMax</span>
+            <span class="px-1.5 py-0.5 rounded-md bg-orange-500/15 border border-orange-500/35 text-[10px] font-mono font-extrabold text-orange-300">
+              OVR 100 AI
+            </span>
+          </div>
+          <p class="text-[10px] text-zinc-400 hidden sm:block">Cosmic Biometric Facial Aesthetics</p>
+        </div>
+      </div>
+
+      <!-- Right Controls -->
+      <div class="flex items-center gap-2">
+        <!-- Remaining Scans Quota Pill -->
+        <div
+          id="nav-quota-badge"
+          class="hidden items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/30 text-xs"
+          title="Số lần chấm còn lại ước tính dựa trên số token/Pollen hiện có"
+        >
+          <span class="text-orange-400">⚡</span>
+          <span id="nav-quota-text" class="font-mono font-bold text-orange-200 text-[11px]">Còn ~-- lượt</span>
+          <button
+            type="button"
+            onclick="fetchAccountBalanceAndScans(true)"
+            title="Cập nhật lại số dư token"
+            class="text-[11px] text-orange-300/80 hover:text-white transition px-1"
+          >
+            ↻
+          </button>
+        </div>
+
+        <!-- Connected Account Pill -->
+        <div
+          id="nav-auth-badge"
+          class="hidden items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/90 border border-orange-500/25 text-xs"
+        >
+          <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+          <span id="nav-auth-text" class="text-zinc-200 font-semibold hidden md:inline">Đã kết nối</span>
+          <button
+            type="button"
+            onclick="logoutPollinations()"
+            class="px-2 py-0.5 rounded-full bg-white/10 hover:bg-rose-500/30 text-[11px] font-bold text-zinc-200 transition"
+          >
+            Thoát
+          </button>
+        </div>
+
+        <!-- Sound Toggle -->
+        <button
+          type="button"
+          id="btn-sound"
+          onclick="toggleSound()"
+          title="Bật/Tắt âm thanh"
+          class="p-2.5 rounded-xl bg-white/5 hover:bg-orange-500/15 border border-white/10 text-zinc-300 transition"
+        >
+          🔊
+        </button>
+
+        <!-- Scale Info Button -->
+        <button
+          type="button"
+          onclick="openScaleModal()"
+          class="px-3 py-2 rounded-xl bg-white/5 hover:bg-orange-500/15 border border-white/10 text-xs font-bold text-zinc-200 transition flex items-center gap-1.5"
+        >
+          <span>🪐</span>
+          <span class="hidden sm:inline">Thang điểm 100</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- TOAST MESSAGE BANNER -->
+  <div id="toast-banner" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden max-w-md w-[92%]">
+    <div class="glass-panel rounded-2xl px-4 py-3 border border-orange-500/45 flex items-center gap-2.5 shadow-2xl">
+      <span id="toast-icon" class="text-base">✨</span>
+      <p id="toast-text" class="text-xs sm:text-sm font-semibold text-white flex-1"></p>
+    </div>
+  </div>
+
+  <!-- SCALE INFO MODAL -->
+  <div id="scale-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div class="glass-panel rounded-3xl max-w-2xl w-full p-5 sm:p-6 border border-orange-500/25 space-y-4 my-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base sm:text-lg font-black text-white">Bảng Chuẩn 7 Cấp Độ Rank &amp; Thang Điểm OVR</h3>
+        <button
+          type="button"
+          onclick="closeScaleModal()"
+          class="w-8 h-8 rounded-xl bg-white/10 hover:bg-orange-500/25 text-zinc-300 font-bold"
+        >
+          ✕
+        </button>
+      </div>
+      <p class="text-xs text-zinc-300 leading-relaxed">
+        Mỗi lần chấm, hệ thống tự động gửi kèm <b class="text-orange-300">Bảng Minh Họa 7 Rank Trực Quan</b> bên dưới cho Vision AI đối chiếu song song với <b class="text-white">Ảnh Chính Diện</b> và <b class="text-amber-300">Ảnh Góc Nghiêng 90°</b>:
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+        <div class="sm:col-span-5 rounded-2xl overflow-hidden border border-orange-500/35 bg-white p-1.5 shadow-lg">
+          <img id="rank-chart-preview-img" alt="Bảng chuẩn 7 rank PSL" class="w-full h-auto rounded-xl object-contain" />
+        </div>
+        <div class="sm:col-span-7 space-y-1.5 text-xs">
+          <div class="p-2 rounded-xl bg-rose-500/15 border border-rose-400/30 flex justify-between gap-2">
+            <span class="font-bold text-rose-300">1 – 29 • SUB 3</span>
+            <span class="text-zinc-300 text-right">Khuyết điểm nặng, bất đối xứng rõ, da lão hóa/mụn dày</span>
+          </div>
+          <div class="p-2 rounded-xl bg-rose-500/10 border border-rose-400/20 flex justify-between gap-2">
+            <span class="font-bold text-rose-200">30 – 41 • SUB 5</span>
+            <span class="text-zinc-300 text-right">Mặt tròn mềm, cằm/hàm lẹm, nọng cằm hoặc thiếu nét</span>
+          </div>
+          <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-400/25 flex justify-between gap-2">
+            <span class="font-bold text-amber-300">42 – 49 • LTN</span>
+            <span class="text-zinc-300 text-right">Dưới trung bình nhẹ, viền hàm mờ, nét hiền phổ thông</span>
+          </div>
+          <div class="p-2 rounded-xl bg-zinc-500/15 border border-zinc-400/25 flex justify-between gap-2">
+            <span class="font-bold text-zinc-200">50 – 62 • MTN</span>
+            <span class="text-zinc-300 text-right">Trung bình chuẩn (Mid-Tier Normie), hài hòa cơ bản</span>
+          </div>
+          <div class="p-2 rounded-xl bg-orange-500/15 border border-orange-500/35 flex justify-between gap-2">
+            <span class="font-bold text-orange-300">63 – 73 • HTN</span>
+            <span class="text-zinc-300 text-right">Trên trung bình (High-Tier Normie), gọn gàng sáng sủa</span>
+          </div>
+          <div class="p-2 rounded-xl bg-amber-400/15 border border-amber-400/35 flex justify-between gap-2">
+            <span class="font-bold text-amber-200">74 – 89 • CHAD</span>
+            <span class="text-zinc-300 text-right">Rất thu hút, hàm góc cạnh sắc, mắt sâu, má hóp 3D</span>
+          </div>
+          <div class="p-2 rounded-xl bg-emerald-500/15 border border-emerald-400/35 flex justify-between gap-2">
+            <span class="font-bold text-emerald-300">90 – 100 • TRUE ADAM</span>
+            <span class="text-zinc-300 text-right">Đỉnh cao tuyệt đối, cấu trúc xương hoàn mỹ như tạc</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:py-10">
+
+    <!-- ==================== VIEW 1: GOOGLE / POLLINATIONS LOGIN GATE ==================== -->
+    <section id="view-login" class="max-w-md mx-auto py-6 sm:py-12">
+      <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-orange-500/25 text-center space-y-6 relative overflow-hidden">
+        <div class="relative w-20 h-20 mx-auto flex items-center justify-center">
+          <div class="cosmic-orbit absolute inset-0 rounded-full animate-spin" style="animation-duration: 18s"></div>
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-xl shadow-orange-500/30">
+            <svg class="w-7 h-7 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <span class="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-[11px] font-bold text-orange-300">
+            Pollinations Vision AI • Miễn Phí Hằng Ngày
+          </span>
+          <h1 class="text-2xl font-black text-white tracking-tight">Đăng Nhập Vào GlowMax AI</h1>
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Đăng nhập bằng tài khoản Google thông qua Pollinations để tự động cấp quyền phân tích khuôn mặt 2 góc &amp; kiểm tra số lượt quét còn lại.
+          </p>
+        </div>
+
+        <!-- Primary 1-Click OAuth Button -->
+        <button
+          type="button"
+          onclick="connectWithPollinationsOAuth()"
+          class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-black font-extrabold text-sm shadow-lg shadow-orange-500/25 transition flex items-center justify-center gap-3 active:scale-[0.99]"
+        >
+          <span class="w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-sm">
+            <svg class="w-4 h-4" viewBox="0 0 24 24">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"/>
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z"/>
+              <path fill="#FBBC05" d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.6 7.4C.6 9.4 0 11.6 0 14s.6 4.6 1.6 6.6l3.7-2.8z"/>
+              <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 20.4 7.4 23 12 23z"/>
+            </svg>
+          </span>
+          <span>Tiếp Tục Với Tài Khoản Google</span>
+        </button>
+
+        <!-- Secondary Manual Key Option (For offline HTML or custom Secret Key) -->
+        <div class="pt-4 border-t border-white/10 space-y-2.5 text-left">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-semibold text-zinc-400">Hoặc dùng Secret Key (<code class="text-orange-300">sk_...</code>):</span>
+            <a
+              href="https://enter.pollinations.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-[11px] font-bold text-orange-400 hover:underline"
+            >
+              Lấy Key ↗
+            </a>
+          </div>
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <input
+                type="password"
+                id="manual-key-input"
+                placeholder="Dán mã sk_... tại đây"
+                class="w-full px-3.5 py-2.5 pr-9 rounded-xl bg-black/80 border border-white/15 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+              />
+              <button
+                type="button"
+                onclick="toggleKeyVisibility()"
+                title="Hiện/Ẩn mã"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white"
+              >
+                👁️
+              </button>
+            </div>
+            <button
+              type="button"
+              onclick="saveAndVerifyManualKey()"
+              class="px-4 py-2.5 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/40 text-orange-200 font-bold text-xs transition"
+            >
+              Vào App
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: DUAL-ANGLE UPLOAD & CAMERA CAPTURE ==================== -->
+    <section id="view-upload" class="hidden max-w-4xl mx-auto space-y-6">
+      <!-- Hero Heading -->
+      <div class="text-center space-y-2">
+        <div
+          class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-300 text-xs font-bold"
+        >
+          <span class="w-2 h-2 rounded-full bg-orange-400 animate-ping"></span>
+          <span>Pollinations Vision AI • Chấm Đồng Thời 2 Góc Mặt (OVR)</span>
+        </div>
+        <h1 class="text-2xl sm:text-4xl font-black text-white tracking-tight">
+          Chấm Điểm <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500">OVR Khuôn Mặt</span> 2 Góc
+        </h1>
+        <p class="text-xs sm:text-sm text-zinc-400 max-w-2xl mx-auto">
+          Tải lên hoặc chụp cùng lúc <b class="text-zinc-200">Ảnh Chính Diện</b> và <b class="text-zinc-200">Ảnh Góc Nghiêng 90°</b> để AI phân tích trọn vẹn 48 chỉ số từ góc hàm, đường E-Line đến nọng cằm và làn da.
+        </p>
+      </div>
+
+      <!-- Control Bar: Gender + AI Mode -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+        <!-- 1. Gender Selector -->
+        <div class="glass-panel rounded-2xl p-2 flex flex-col gap-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2">1. Tiêu Chuẩn Thẩm Mỹ</span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              id="btn-gender-male"
+              onclick="setGender('male')"
+              class="py-2 px-2 rounded-xl text-xs font-bold transition bg-orange-500/20 text-orange-200 border border-orange-500/45"
+            >
+              ♂ Nam Giới
+            </button>
+            <button
+              type="button"
+              id="btn-gender-female"
+              onclick="setGender('female')"
+              class="py-2 px-2 rounded-xl text-xs font-bold transition bg-white/5 text-zinc-400 hover:text-white border border-white/10"
+            >
+              ♀ Nữ Giới
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. AI Strictness Mode -->
+        <div class="glass-panel rounded-2xl p-2 flex flex-col gap-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2">2. Chế Độ Chấm AI</span>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              id="btn-mode-strict"
+              onclick="setAIMode('strict')"
+              class="py-2 px-2 rounded-xl text-xs font-bold transition bg-orange-500/20 text-orange-200 border border-orange-500/45"
+            >
+              Chuẩn Thực Tế
+            </button>
+            <button
+              type="button"
+              id="btn-mode-roast"
+              onclick="setAIMode('roast')"
+              class="py-2 px-2 rounded-xl text-xs font-bold transition bg-white/5 text-zinc-400 hover:text-white border border-white/10"
+            >
+              Roast Gắt 🔥
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Single-Model Lock Bar (Prevents Cross-AI Variance) -->
+      <div class="glass-panel rounded-2xl p-2.5 max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 border border-orange-500/20">
+        <div class="flex items-center gap-2 px-1">
+          <span class="text-sm">🎯</span>
+          <div>
+            <div class="text-[11px] font-extrabold text-orange-200">Khóa Cố Định 1 Mô Hình AI Duy Nhất (Chống Sai Số)</div>
+            <div class="text-[10px] text-zinc-400">Không bao giờ tự động nhảy sang AI khác gây lệch thang điểm</div>
+          </div>
+        </div>
+        <select
+          id="locked-model-select"
+          onchange="setLockedModel(this.value)"
+          class="w-full sm:w-auto px-3 py-2 rounded-xl bg-black/85 border border-orange-500/40 text-xs font-mono font-bold text-orange-300 focus:outline-none focus:border-orange-400"
+        >
+          <option value="openai">🔒 openai (Chuẩn Ổn Định - Khuyên dùng)</option>
+          <option value="openai-fast">🔒 openai-fast (Nhanh &amp; Tiết kiệm)</option>
+          <option value="gemini-fast">🔒 gemini-fast (Gemini Vision Nhanh)</option>
+        </select>
+      </div>
+
+      <!-- Visual 7-Rank Reference Attachment Status Pill -->
+      <div class="max-w-2xl mx-auto flex items-center justify-between gap-2 px-3.5 py-2 rounded-2xl bg-orange-500/10 border border-orange-500/25 text-xs">
+        <div class="flex items-center gap-2 text-orange-200">
+          <span>📊</span>
+          <span>Tự động gửi kèm <b>Ảnh Bảng Chuẩn 7 Rank (Sub 3 → True Adam)</b> để AI đối chiếu phân hạng</span>
+        </div>
+        <button
+          type="button"
+          onclick="openScaleModal()"
+          class="px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/40 text-[11px] font-bold text-orange-200 flex-shrink-0 transition"
+        >
+          Xem bảng rank
+        </button>
+      </div>
+
+      <!-- Live Webcam Modal / Inline Box (Shared for Front or Profile slot) -->
+      <div id="camera-box" class="hidden glass-panel rounded-3xl p-5 border border-orange-500/40 space-y-4 max-w-md mx-auto text-center">
+        <div class="flex items-center justify-between">
+          <span id="camera-target-badge" class="text-xs font-extrabold text-orange-300">
+            📸 Đang chụp: Ảnh Chính Diện
+          </span>
+          <button
+            type="button"
+            onclick="stopCamera()"
+            class="text-xs text-zinc-400 hover:text-rose-300 font-bold"
+          >
+            ✕ Đóng
+          </button>
+        </div>
+
+        <div class="relative w-full mx-auto rounded-2xl overflow-hidden border border-orange-500/40 bg-black aspect-[3/4]">
+          <video id="webcam-video" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
+
+          <!-- Front Oval Alignment Guide -->
+          <div
+            id="guide-front-oval"
+            class="pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <div class="w-52 h-72 rounded-full border-2 border-dashed border-orange-400/80 shadow-[0_0_0_9999px_rgba(5,5,7,0.5)]"></div>
+          </div>
+
+          <!-- Side Profile 90° Guide -->
+          <div
+            id="guide-profile-line"
+            class="hidden pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <div class="w-56 h-72 rounded-3xl border-2 border-dashed border-amber-400/85 shadow-[0_0_0_9999px_rgba(5,5,7,0.5)] flex items-center justify-center">
+              <span class="text-[11px] font-bold text-amber-200 bg-black/85 px-2.5 py-1 rounded-full">
+                Xoay mặt nghiêng 90° →
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onclick="captureWebcamPhoto()"
+            class="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-black font-extrabold text-sm shadow-lg"
+          >
+            📸 Chụp &amp; Lưu Vào Khung
+          </button>
+        </div>
+      </div>
+
+      <!-- DUAL PHOTO SLOTS GRID (1: FRONTAL | 2: SIDE PROFILE 90°) -->
+      <div id="dual-slots-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- SLOT 1: FRONTAL VIEW -->
+        <div
+          id="dropzone-front"
+          class="glass-panel rounded-3xl p-5 border-2 border-dashed border-white/15 hover:border-orange-500/55 transition-all flex flex-col justify-between space-y-4 relative"
+        >
+          <input
+            type="file"
+            id="file-input-front"
+            accept="image/*"
+            class="hidden"
+            onchange="handleSlotFileSelect(event, 'front')"
+          />
+
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-1 rounded-lg bg-orange-500/15 border border-orange-500/35 text-orange-300 text-xs font-extrabold">
+              1. Góc Chính Diện (Front)
+            </span>
+            <span id="status-badge-front" class="text-[11px] font-mono text-zinc-400">Chưa có ảnh</span>
+          </div>
+
+          <!-- Empty Prompt -->
+          <div id="empty-slot-front" class="py-6 text-center space-y-3">
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-orange-500/10 border border-orange-500/25 flex items-center justify-center text-2xl">
+              🧑
+            </div>
+            <div class="space-y-1">
+              <h3 class="text-sm font-extrabold text-white">Tải Ảnh Nhìn Thẳng Camera</h3>
+              <p class="text-[11px] text-zinc-400">Kéo thả ảnh vào ô này hoặc chọn tải lên / chụp selfie</p>
+            </div>
+          </div>
+
+          <!-- Preview Thumbnail (Hidden until loaded) -->
+          <div id="preview-slot-front" class="hidden relative rounded-2xl overflow-hidden bg-black border border-orange-500/40 aspect-[3/4] max-h-72 mx-auto w-full">
+            <canvas id="thumb-canvas-front" class="w-full h-full object-contain"></canvas>
+            <button
+              type="button"
+              onclick="clearSlot('front')"
+              title="Xóa ảnh chính diện"
+              class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/85 hover:bg-rose-500/80 text-white text-[11px] font-bold border border-white/15 transition"
+            >
+              ✕ Xóa
+            </button>
+          </div>
+
+          <!-- Slot Buttons -->
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onclick="document.getElementById('file-input-front').click()"
+              class="py-2.5 px-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/40 text-orange-200 font-bold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <span>📁</span>
+              <span>Chọn Ảnh</span>
+            </button>
+            <button
+              type="button"
+              onclick="startCameraForSlot('front')"
+              class="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <span>📸</span>
+              <span>Chụp Camera</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- SLOT 2: SIDE PROFILE 90° -->
+        <div
+          id="dropzone-profile"
+          class="glass-panel rounded-3xl p-5 border-2 border-dashed border-white/15 hover:border-amber-500/55 transition-all flex flex-col justify-between space-y-4 relative"
+        >
+          <input
+            type="file"
+            id="file-input-profile"
+            accept="image/*"
+            class="hidden"
+            onchange="handleSlotFileSelect(event, 'profile')"
+          />
+
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs font-extrabold">
+              2. Góc Nghiêng 90° (Side Profile)
+            </span>
+            <span id="status-badge-profile" class="text-[11px] font-mono text-zinc-400">Chưa có ảnh</span>
+          </div>
+
+          <!-- Empty Prompt -->
+          <div id="empty-slot-profile" class="py-6 text-center space-y-3">
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-2xl">
+              👤
+            </div>
+            <div class="space-y-1">
+              <h3 class="text-sm font-extrabold text-white">Tải Ảnh Chụp Ngang 90°</h3>
+              <p class="text-[11px] text-zinc-400">Thấy rõ sống mũi, môi, cằm, góc hàm Gonial và cổ–hàm</p>
+            </div>
+          </div>
+
+          <!-- Preview Thumbnail (Hidden until loaded) -->
+          <div id="preview-slot-profile" class="hidden relative rounded-2xl overflow-hidden bg-black border border-amber-500/40 aspect-[3/4] max-h-72 mx-auto w-full">
+            <canvas id="thumb-canvas-profile" class="w-full h-full object-contain"></canvas>
+            <button
+              type="button"
+              onclick="clearSlot('profile')"
+              title="Xóa ảnh góc nghiêng"
+              class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/85 hover:bg-rose-500/80 text-white text-[11px] font-bold border border-white/15 transition"
+            >
+              ✕ Xóa
+            </button>
+          </div>
+
+          <!-- Slot Buttons -->
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onclick="document.getElementById('file-input-profile').click()"
+              class="py-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <span>📁</span>
+              <span>Chọn Ảnh</span>
+            </button>
+            <button
+              type="button"
+              onclick="startCameraForSlot('profile')"
+              class="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <span>📸</span>
+              <span>Chụp Camera</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE TOKEN BALANCE & REMAINING SCANS TELEMETRY BAR -->
+      <div class="glass-panel rounded-2xl px-4 py-3 border border-orange-500/25 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-base">
+            🛰️
+          </span>
+          <div>
+            <div class="font-bold text-white flex flex-wrap items-center gap-2">
+              <span>Hạn Mức Chấm Trên Tài Khoản:</span>
+              <span id="quota-scans-remaining" class="font-mono font-black text-orange-400">Đang kiểm tra...</span>
+            </div>
+            <p class="text-[11px] text-zinc-400">
+              Số dư hiện tại: <b id="quota-balance-usd" class="font-mono text-zinc-200">--</b> • Tiêu hao ~<span id="quota-cost-per-scan" class="font-mono text-amber-300">$0.0025</span>/lần mới
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="btn-grant-balance-scope"
+            onclick="grantBalanceReadPermission()"
+            class="hidden px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/45 text-amber-200 font-bold text-[11px] transition flex items-center gap-1"
+          >
+            <span>🔓</span>
+            <span>Cấp quyền đọc số dư</span>
+          </button>
+          <button
+            type="button"
+            onclick="fetchAccountBalanceAndScans(true)"
+            class="px-3 py-1.5 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/35 text-orange-200 font-bold text-[11px] transition flex items-center gap-1"
+          >
+            <span>↻</span>
+            <span>Làm mới số dư</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PRIMARY START DUAL-ANGLE OVR SCAN BUTTON -->
+      <div class="space-y-2 text-center">
+        <button
+          type="button"
+          id="btn-start-dual-scan"
+          onclick="startBiometricScan(false)"
+          class="w-full sm:w-auto sm:min-w-[340px] py-4 px-8 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-black font-black text-sm sm:text-base shadow-xl shadow-orange-500/25 hover:opacity-95 transition flex items-center justify-center gap-2.5 mx-auto active:scale-[0.99]"
+        >
+          <span>⚡</span>
+          <span id="btn-dual-scan-label">Chấm Điểm OVR Tổng Hợp (Cần đủ 2 ảnh)</span>
+        </button>
+        <p class="text-[11px] text-zinc-400">
+          Khóa tham số <b class="text-orange-300">Deterministic Seed (Temp = 0)</b> • Quét lại ảnh cũ miễn phí <b class="text-amber-300">0 token</b>
+        </p>
+      </div>
+
+      <!-- 1-Click Dual Sample Portraits -->
+      <div class="glass-panel rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-zinc-300">Hoặc thử nhanh với bộ đôi ảnh mẫu mô phỏng (Chính diện + Nghiêng):</span>
+          <span class="text-[11px] font-mono text-orange-400">Dual Demo</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onclick="runDualDemoSample('balanced')"
+            class="p-3 rounded-xl bg-white/5 hover:bg-orange-500/15 border border-white/10 hover:border-orange-500/35 text-left transition flex items-center gap-3"
+          >
+            <span class="text-xl">🧑👤</span>
+            <div>
+              <div class="text-xs font-bold text-white">Bộ Đôi Cân Đối Hài Hòa</div>
+              <div class="text-[10px] text-zinc-400">Chính diện đối xứng + E-Line chuẩn &amp; da sạch</div>
+            </div>
+          </button>
+          <button
+            type="button"
+            onclick="runDualDemoSample('flawed')"
+            class="p-3 rounded-xl bg-white/5 hover:bg-amber-500/15 border border-white/10 hover:border-amber-500/35 text-left transition flex items-center gap-3"
+          >
+            <span class="text-xl">🧔👤</span>
+            <div>
+              <div class="text-xs font-bold text-white">Bộ Đôi Có Khuyết Điểm Thực Tế</div>
+              <div class="text-[10px] text-zinc-400">Nọng cằm góc nghiêng + mụn viêm vùng má</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: DUAL-ANGLE AI SCANNING PROGRESS ==================== -->
+    <section id="view-scanning" class="hidden max-w-xl mx-auto py-8 text-center space-y-6">
+      <div class="glass-panel rounded-3xl p-6 space-y-5 border border-orange-500/35">
+        <div class="grid grid-cols-2 gap-3 max-w-md mx-auto">
+          <div class="relative rounded-2xl overflow-hidden border border-orange-500/45 bg-black aspect-[3/4]">
+            <canvas id="scanning-preview-front" class="w-full h-full object-cover"></canvas>
+            <span class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/85 text-[10px] font-bold text-orange-300">Chính Diện</span>
+            <div class="laser-line"></div>
+          </div>
+          <div class="relative rounded-2xl overflow-hidden border border-amber-500/45 bg-black aspect-[3/4]">
+            <canvas id="scanning-preview-profile" class="w-full h-full object-cover"></canvas>
+            <span class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/85 text-[10px] font-bold text-amber-300">Góc Nghiêng 90°</span>
+            <div class="laser-line" style="animation-delay: 0.6s"></div>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div class="inline-flex items-center justify-center gap-2 text-orange-300 font-bold text-sm">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              ></path>
+            </svg>
+            <span id="scan-status-title">Pollinations Vision AI Đang Quét 2 Góc Mặt...</span>
+          </div>
+          <p id="scan-status-sub" class="text-xs text-zinc-400">
+            Đang đối chiếu đồng thời ảnh chính diện &amp; góc nghiêng 90° với khóa Seed cố định
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 4: COMPREHENSIVE 48-METRIC OVR RESULTS ==================== -->
+    <section id="view-results" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- LEFT COLUMN: DUAL-ANGLE BIOMETRIC OVERLAY CANVAS & TELEMETRY -->
+        <div class="lg:col-span-5 space-y-4 lg:sticky lg:top-20">
+          <div class="glass-panel rounded-3xl p-4 space-y-3.5">
+            <!-- View Switcher (Front vs Profile) + Overlay Mode Switcher -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-1 bg-black/80 p-1 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  id="res-tab-front"
+                  onclick="setResultCanvasView('front')"
+                  class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-orange-500/25 text-orange-200 transition"
+                >
+                  Chính Diện
+                </button>
+                <button
+                  type="button"
+                  id="res-tab-profile"
+                  onclick="setResultCanvasView('profile')"
+                  class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white transition"
+                >
+                  Góc Nghiêng 90°
+                </button>
+              </div>
+
+              <div class="flex items-center gap-1 bg-black/80 p-1 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  id="ov-ratios"
+                  onclick="setOverlayMode('ratios')"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold bg-orange-500/25 text-orange-200 transition"
+                >
+                  Tỷ lệ
+                </button>
+                <button
+                  type="button"
+                  id="ov-mesh"
+                  onclick="setOverlayMode('mesh')"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white transition"
+                >
+                  Lưới 3D
+                </button>
+                <button
+                  type="button"
+                  id="ov-none"
+                  onclick="setOverlayMode('none')"
+                  class="px-2 py-1 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white transition"
+                >
+                  Ảnh gốc
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <span id="landmark-badge" class="text-[11px] font-mono font-bold text-orange-300">
+                ● 468 ĐIỂM MỐC AI THỰC TẾ
+              </span>
+              <span id="consistency-badge" class="text-[10px] font-mono text-amber-300">🔒 Seed Khóa Nhất Quán</span>
+            </div>
+
+            <!-- Interactive Biometric Canvas -->
+            <div class="relative rounded-2xl overflow-hidden bg-black border border-white/10 aspect-[3/4]">
+              <canvas id="result-canvas" class="w-full h-full object-contain"></canvas>
+            </div>
+
+            <!-- Combined Front + Side Profile Telemetry Strip -->
+            <div id="telemetry-strip" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center"></div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onclick="resetToUpload()"
+              class="py-3 px-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-bold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <span>🔄</span>
+              <span>Quét Bộ Ảnh Khác</span>
+            </button>
+            <button
+              type="button"
+              onclick="exportResultCard()"
+              class="py-3 px-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-black font-extrabold text-xs shadow-lg shadow-orange-500/20 hover:opacity-95 transition flex items-center justify-center gap-1.5"
+            >
+              <span>⬇️</span>
+              <span>Tải Thẻ OVR (.PNG)</span>
+            </button>
+            <button
+              type="button"
+              onclick="copySummaryText()"
+              class="col-span-2 py-2.5 px-4 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-semibold text-xs transition flex items-center justify-center gap-1.5"
+            >
+              <span>📋</span>
+              <span>Sao Chép Điểm OVR &amp; Trọn Bộ 48 Chỉ Số</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: OVR SCORE GAUGE, RADAR, 6 PILLARS, 48 METRICS, GLOW-UP PLAN -->
+        <div class="lg:col-span-7 space-y-6">
+          <!-- 1. MAIN OVR SCORE CARD -->
+          <div class="glass-panel rounded-3xl p-5 sm:p-6 space-y-5 border border-orange-500/30">
+            <div class="flex flex-col sm:flex-row items-center gap-5">
+              <!-- Circular OVR Gauge with Subtle Orbital Ring -->
+              <div class="relative w-36 h-36 flex-shrink-0 flex items-center justify-center">
+                <div class="cosmic-orbit absolute inset-0 rounded-full"></div>
+                <svg class="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" />
+                  <circle
+                    id="score-ring-circle"
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    fill="none"
+                    stroke="#FF6B00"
+                    stroke-width="10"
+                    stroke-linecap="round"
+                    stroke-dasharray="326.72"
+                    stroke-dashoffset="326.72"
+                    style="transition: stroke-dashoffset 1.1s cubic-bezier(0.22, 1, 0.36, 1)"
+                  />
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                  <span class="font-mono text-[10px] font-extrabold tracking-widest text-orange-400">OVR</span>
+                  <span id="overall-score-num" class="font-mono text-3xl font-black text-white leading-none">0</span>
+                  <span class="font-mono text-[10px] text-zinc-400 mt-0.5">/ 100</span>
+                </div>
+              </div>
+
+              <!-- Tier & Potential Summary -->
+              <div class="flex-1 text-center sm:text-left space-y-2.5">
+                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <span
+                    id="tier-badge"
+                    class="px-3 py-1 rounded-full text-xs font-extrabold bg-orange-500/15 text-orange-300 border border-orange-500/40"
+                  >
+                    MTN • Trung bình
+                  </span>
+                  <span
+                    id="psl-equivalent-badge"
+                    class="px-2.5 py-1 rounded-full text-[11px] font-mono font-extrabold bg-emerald-500/15 text-emerald-300 border border-emerald-400/35"
+                  >
+                    PSL 5.0 / 8.5
+                  </span>
+                  <span
+                    id="mode-angle-badge"
+                    class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-200 border border-amber-500/30"
+                  >
+                    OVR 2 Góc (Chính Diện + Nghiêng 90°)
+                  </span>
+                </div>
+
+                <p id="archetype-text" class="text-sm font-bold text-white">
+                  Kiểu gương mặt: Cân đối tự nhiên
+                </p>
+
+                <!-- Bone Structure (70%) vs Soft Tissue/Skin (30%) Breakdown -->
+                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-[11px] font-mono">
+                  <span id="angularity-badge" class="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-orange-200">
+                    Độ góc cạnh: Hài hòa gọn gàng
+                  </span>
+                  <span id="bone-soft-split" class="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300">
+                    Khung xương (70%): 60đ • Mô mềm &amp; Da (30%): 58đ
+                  </span>
+                </div>
+
+                <!-- Sub-scores: Front vs Profile + Percentile + Potential -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div class="rounded-2xl bg-black/70 border border-white/10 p-2">
+                    <div class="text-[10px] text-zinc-400">Chính diện</div>
+                    <div id="front-subscore-text" class="font-mono text-sm font-extrabold text-orange-300">60/100</div>
+                  </div>
+                  <div class="rounded-2xl bg-black/70 border border-white/10 p-2">
+                    <div class="text-[10px] text-zinc-400">Góc nghiêng</div>
+                    <div id="profile-subscore-text" class="font-mono text-sm font-extrabold text-amber-300">58/100</div>
+                  </div>
+                  <div class="rounded-2xl bg-black/70 border border-white/10 p-2">
+                    <div class="text-[10px] text-zinc-400">Phân vị</div>
+                    <div id="percentile-text" class="font-mono text-sm font-extrabold text-orange-200">Top 50%</div>
+                  </div>
+                  <div class="rounded-2xl bg-black/70 border border-white/10 p-2">
+                    <div class="text-[10px] text-zinc-400">Tiềm năng OVR</div>
+                    <div id="potential-text" class="font-mono text-sm font-extrabold text-emerald-400">72/100</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI Verdict Box -->
+            <div class="rounded-2xl bg-black/75 border border-white/10 p-4 space-y-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-extrabold text-orange-300">
+                <div class="flex items-center gap-2">
+                  <span>🪐</span>
+                  <span>Nhận Xét Đối Chiếu 2 Góc Từ Pollinations Vision AI</span>
+                </div>
+                <button
+                  type="button"
+                  onclick="startBiometricScan(true)"
+                  title="Bỏ qua bộ nhớ đệm và yêu cầu AI chấm mới hoàn toàn"
+                  class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-orange-500/20 border border-white/10 text-[10px] font-mono text-zinc-300 transition"
+                >
+                  ↻ Chấm lại mới
+                </button>
+              </div>
+              <p id="ai-verdict-text" class="text-xs sm:text-sm text-zinc-200 leading-relaxed"></p>
+              <div id="detected-strengths-list" class="flex flex-wrap gap-1.5 pt-1"></div>
+              <div id="detected-flaws-list" class="flex flex-wrap gap-1.5"></div>
+            </div>
+          </div>
+
+          <!-- 2. RADAR CHART & 6 STRUCTURAL PILLARS -->
+          <div class="glass-panel rounded-3xl p-5 sm:p-6 space-y-5">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base sm:text-lg font-black text-white">Tổng Quan 6 Nhóm Cấu Trúc Khuôn Mặt</h2>
+              <span class="text-[11px] font-mono text-zinc-400">Thang 100</span>
+            </div>
+
+            <div class="flex justify-center">
+              <canvas id="radar-canvas" class="max-w-[300px] w-full aspect-square"></canvas>
+            </div>
+
+            <div id="metrics-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+          </div>
+
+          <!-- 3. DETAILED 48 CRANIOFACIAL & AESTHETIC METRICS -->
+          <div class="glass-panel rounded-3xl p-5 sm:p-6 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 class="text-base sm:text-lg font-black text-white">Bảng 48 Chỉ Số Sinh Trắc Học Chi Tiết</h2>
+                <p class="text-xs text-zinc-400">Chấm riêng từng đường nét từ xương hàm, mắt, gò má, mũi, tóc đến làn da</p>
+              </div>
+              <button
+                type="button"
+                id="btn-flaws-only"
+                onclick="toggleFlawsOnly()"
+                class="self-start sm:self-auto px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-bold transition"
+              >
+                ⚠️ Chỉ xem điểm yếu (&lt;60đ)
+              </button>
+            </div>
+
+            <!-- Category Filter Pills -->
+            <div class="flex flex-wrap gap-1.5" id="metric-cat-filters">
+              <button
+                type="button"
+                data-cat="all"
+                onclick="setMetricCategory('all')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-500/25 text-orange-200 border border-orange-500/45 transition"
+              >
+                Tất cả (48)
+              </button>
+              <button
+                type="button"
+                data-cat="jaw"
+                onclick="setMetricCategory('jaw')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition"
+              >
+                Hàm &amp; Cằm (7)
+              </button>
+              <button
+                type="button"
+                data-cat="eyes"
+                onclick="setMetricCategory('eyes')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition"
+              >
+                Mắt &amp; Mày (14)
+              </button>
+              <button
+                type="button"
+                data-cat="cheekbones"
+                onclick="setMetricCategory('cheekbones')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition"
+              >
+                Gò Má (7)
+              </button>
+              <button
+                type="button"
+                data-cat="proportions"
+                onclick="setMetricCategory('proportions')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition"
+              >
+                Tỷ Lệ Mặt (6)
+              </button>
+              <button
+                type="button"
+                data-cat="nose_hair"
+                onclick="setMetricCategory('nose_hair')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition"
+              >
+                Mũi, Môi &amp; Tóc (10)
+              </button>
+              <button
+                type="button"
+                data-cat="skin"
+                onclick="setMetricCategory('skin')"
+                class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition"
+              >
+                Làn Da (4)
+              </button>
+            </div>
+
+            <div class="text-[11px] font-mono text-zinc-400" id="metrics-48-count">
+              Đang hiển thị 48 / 48 chỉ số
+            </div>
+
+            <div id="metrics-48-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[540px] overflow-y-auto pr-1"></div>
+          </div>
+
+          <!-- 4. PERSONALIZED GLOW-UP ROADMAP -->
+          <div class="glass-panel rounded-3xl p-5 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-base sm:text-lg font-black text-white">Lộ Trình Tối Ưu Nhan Sắc (Glow-Up Plan)</h2>
+              <span class="text-xs font-bold text-orange-400">+Tăng Điểm Thực Tế</span>
+            </div>
+            <div id="glowup-list" class="space-y-3"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Hidden High-Res Share Card Export Canvas -->
+  <canvas id="share-export-canvas" width="900" height="1200" class="hidden"></canvas>
+
+  <!-- ==================== JAVASCRIPT APPLICATION LOGIC ==================== -->
+  <script>
+    // ==================== 1. GLOBAL STATE & 48 METRICS CATALOG ====================
+    const state = {
+      gender: 'male', // 'male' | 'female'
+      aiMode: 'strict', // 'strict' | 'roast'
+      lockedModel: localStorage.getItem('glowmax_locked_model') || 'openai',
+      soundEnabled: true,
+      pollinationsKey: localStorage.getItem('glowmax_pollinations_key') || '',
+      balanceUsd: null,
+      estimatedCostPerScan: Number(localStorage.getItem('glowmax_cost_per_scan')) || 0.0025,
+      webcamStream: null,
+      activeCameraSlot: 'front', // 'front' | 'profile'
+      frontCanvas: null,
+      profileCanvas: null,
+      resultViewAngle: 'front', // 'front' | 'profile'
+      landmarks: null,
+      isRealMediaPipe: false,
+      overlayMode: 'ratios',
+      faceMeshInstance: null,
+      analysisResult: null,
+      activeMetricCategory: 'all',
+      showFlawsOnly: false,
+    };
+
+    const RESULT_CACHE_STORAGE_KEY = 'glowmax_deterministic_cache_v5';
+    const MAX_CACHE_ENTRIES = 18;
+    let cachedRankChartDataUrl = null;
+
+    // Exact 48 Craniofacial & Aesthetic Metrics Catalog
+    const METRIC_48_CATALOG = [
+      // Group 1: Hàm & Cằm (1 - 7)
+      { id: 1, name: 'Góc hàm', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: '124°' },
+      { id: 2, name: 'Tỷ lệ nhô cằm', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: 'Trung bình' },
+      { id: 3, name: 'Nhô hàm trên', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: 'Cân đối' },
+      { id: 4, name: 'Góc mở hàm', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: '126°' },
+      { id: 5, name: 'Tỷ lệ hàm–gò má', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: '0.78' },
+      { id: 6, name: 'Tỷ lệ cằm–mặt', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: '0.21' },
+      { id: 7, name: 'Tỷ lệ cằm–miệng', cat: 'jaw', catLabel: 'Hàm & Cằm', pillar: 'jawline', defaultVal: '1.18' },
+
+      // Group 2: Mắt & Chân Mày (8 - 21)
+      { id: 8, name: 'Kiểu mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Almond' },
+      { id: 9, name: 'Độ nghiêng khóe mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: '+1.2°' },
+      { id: 10, name: 'Tỷ lệ khoảng cách mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: '0.46' },
+      { id: 11, name: 'Tỷ lệ tách mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: '1.02' },
+      { id: 12, name: 'Tỷ lệ khung hình mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: '2.85' },
+      { id: 13, name: 'Hở cùng mạc', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Không hở' },
+      { id: 14, name: 'Bọng mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Nhẹ' },
+      { id: 15, name: 'Độ lộ mí trên', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Vừa phải' },
+      { id: 16, name: 'Mô mềm', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Ổn định' },
+      { id: 17, name: 'Độ nghiêng gờ chân mày', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: '+4°' },
+      { id: 18, name: 'Độ nghiêng chân mày', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: '+3°' },
+      { id: 19, name: 'Độ dày chân mày', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Trung bình' },
+      { id: 20, name: 'Độ dày mi mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Tự nhiên' },
+      { id: 21, name: 'Nhô trên hốc mắt', cat: 'eyes', catLabel: 'Mắt & Mày', pillar: 'eyes', defaultVal: 'Vừa phải' },
+
+      // Group 3: Gò Má & Mô Mềm (22 - 28)
+      { id: 22, name: 'Chiều cao gò má', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'cheekbones', defaultVal: 'Trung bình cao' },
+      { id: 23, name: 'Độ hõm dưới gò má', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'cheekbones', defaultVal: 'Nhẹ' },
+      { id: 24, name: 'Nhô cung gò má', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'cheekbones', defaultVal: 'Cân đối' },
+      { id: 25, name: 'Mỡ mặt', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'cheekbones', defaultVal: 'Vừa phải' },
+      { id: 26, name: 'Rãnh cười', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'cheekbones', defaultVal: 'Mờ' },
+      { id: 27, name: 'Cân đối gò má', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'symmetry', defaultVal: '89%' },
+      { id: 28, name: 'Nhô gò má', cat: 'cheekbones', catLabel: 'Gò Má', pillar: 'cheekbones', defaultVal: 'Hài hòa' },
+
+      // Group 4: Tỷ Lệ Tổng Thể Khuôn Mặt (29 - 34)
+      { id: 29, name: 'Tỷ lệ 1/3 mặt', cat: 'proportions', catLabel: 'Tỷ Lệ Mặt', pillar: 'symmetry', defaultVal: '33/34/33' },
+      { id: 30, name: 'Tỷ lệ rộng–cao mặt', cat: 'proportions', catLabel: 'Tỷ Lệ Mặt', pillar: 'proportions', defaultVal: '1.82' },
+      { id: 31, name: 'Tỷ lệ rộng–cao trán', cat: 'proportions', catLabel: 'Tỷ Lệ Mặt', pillar: 'proportions', defaultVal: '2.15' },
+      { id: 32, name: 'Chiều rộng hàm', cat: 'proportions', catLabel: 'Tỷ Lệ Mặt', pillar: 'jawline', defaultVal: 'Cân xứng' },
+      { id: 33, name: 'Tỷ lệ miệng–mũi', cat: 'proportions', catLabel: 'Tỷ Lệ Mặt', pillar: 'proportions', defaultVal: '1.48' },
+      { id: 34, name: 'Tỷ lệ cổ–hàm', cat: 'proportions', catLabel: 'Tỷ Lệ Mặt', pillar: 'jawline', defaultVal: '115°' },
+
+      // Group 5: Mũi, Môi & Tóc (35 - 44)
+      { id: 35, name: 'Góc mũi–trán', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: '128°' },
+      { id: 36, name: 'Góc mũi–mặt', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: '32°' },
+      { id: 37, name: 'Góc mũi–môi', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: '96°' },
+      { id: 38, name: 'Đường viền đầu mũi', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: 'Gọn' },
+      { id: 39, name: 'Góc sống mũi', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: 'Thẳng' },
+      { id: 40, name: 'Tỷ lệ rộng cánh mũi', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: '1.05' },
+      { id: 41, name: 'Góc môi cằm', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'proportions', defaultVal: '122°' },
+      { id: 42, name: 'Đường chân tóc', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'skin', defaultVal: 'Cân đối' },
+      { id: 43, name: 'Độ dày tóc', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'skin', defaultVal: 'Tốt' },
+      { id: 44, name: 'Thái dương', cat: 'nose_hair', catLabel: 'Mũi, Môi & Tóc', pillar: 'cheekbones', defaultVal: 'Đầy đặn' },
+
+      // Group 6: Làn Da (45 - 48)
+      { id: 45, name: 'Độ trong của da', cat: 'skin', catLabel: 'Làn Da', pillar: 'skin', defaultVal: 'Khá' },
+      { id: 46, name: 'Kết cấu da', cat: 'skin', catLabel: 'Làn Da', pillar: 'skin', defaultVal: 'Mịn nhẹ' },
+      { id: 47, name: 'Độ đều màu da', cat: 'skin', catLabel: 'Làn Da', pillar: 'skin', defaultVal: 'Ổn định' },
+      { id: 48, name: 'Khuyết điểm da', cat: 'skin', catLabel: 'Làn Da', pillar: 'skin', defaultVal: 'Ít khuyết điểm' },
+    ];
+
+    // ==================== 2. AUDIO, TOAST, MODAL & DETERMINISTIC HELPERS ====================
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function computeDualImageFingerprint(frontCanvas, profileCanvas) {
+      let h1 = 0x811c9dc5;
+      let h2 = 0x1b873593;
+
+      const sampleCanvas = (canvas) => {
+        const tmp = document.createElement('canvas');
+        tmp.width = 48;
+        tmp.height = 64;
+        const ctx = tmp.getContext('2d');
+        ctx.drawImage(canvas, 0, 0, 48, 64);
+        const data = ctx.getImageData(0, 0, 48, 64).data;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i] >> 1;
+          const g = data[i + 1] >> 1;
+          const b = data[i + 2] >> 1;
+          const px = (r << 14) | (g << 7) | b;
+          h1 ^= px;
+          h1 = Math.imul(h1, 0x01000193);
+          h2 ^= px + (i >> 2);
+          h2 = Math.imul(h2, 0x85ebca6b);
+        }
+      };
+
+      sampleCanvas(frontCanvas);
+      sampleCanvas(profileCanvas);
+
+      const u1 = h1 >>> 0;
+      const u2 = h2 >>> 0;
+      const hexHash = u1.toString(16).padStart(8, '0') + u2.toString(16).padStart(8, '0');
+      const numericSeed = (u1 % 899999999) + 100000000;
+      return { hexHash, numericSeed };
+    }
+
+    function getCachedAnalysis(cacheKey) {
+      try {
+        const raw = localStorage.getItem(RESULT_CACHE_STORAGE_KEY);
+        if (!raw) return null;
+        const store = JSON.parse(raw);
+        return store[cacheKey] || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function saveCachedAnalysis(cacheKey, resultObj) {
+      try {
+        const raw = localStorage.getItem(RESULT_CACHE_STORAGE_KEY);
+        const store = raw ? JSON.parse(raw) : {};
+        delete store[cacheKey];
+        store[cacheKey] = resultObj;
+        const keys = Object.keys(store);
+        if (keys.length > MAX_CACHE_ENTRIES) {
+          const excess = keys.length - MAX_CACHE_ENTRIES;
+          for (let i = 0; i < excess; i++) {
+            delete store[keys[i]];
+          }
+        }
+        localStorage.setItem(RESULT_CACHE_STORAGE_KEY, JSON.stringify(store));
+      } catch (e) {
+        // Ignore storage quota errors
+      }
+    }
+
+    function playTone(freq = 640, duration = 0.08) {
+      if (!state.soundEnabled) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.06, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (e) {
+        // Ignore audio autoplay block
+      }
+    }
+
+    function toggleSound() {
+      state.soundEnabled = !state.soundEnabled;
+      document.getElementById('btn-sound').textContent = state.soundEnabled ? '🔊' : '🔇';
+      if (state.soundEnabled) playTone(700, 0.08);
+    }
+
+    let toastTimer = null;
+    function showToast(message, icon = '✨') {
+      const banner = document.getElementById('toast-banner');
+      document.getElementById('toast-text').textContent = message;
+      document.getElementById('toast-icon').textContent = icon;
+      banner.classList.remove('hidden');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 4200);
+    }
+
+    function switchView(viewName) {
+      ['login', 'upload', 'scanning', 'results'].forEach((v) => {
+        const el = document.getElementById(`view-${v}`);
+        if (el) {
+          el.classList.toggle('hidden', v !== viewName);
+        }
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function openScaleModal() {
+      playTone(620, 0.06);
+      const modal = document.getElementById('scale-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeScaleModal() {
+      playTone(480, 0.06);
+      const modal = document.getElementById('scale-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // ==================== 3. ACCOUNT TOKEN BALANCE & GOOGLE / POLLINATIONS AUTH ====================
+    function updateQuotaDisplayUI(statusMessage = null) {
+      const navQuotaBadge = document.getElementById('nav-quota-badge');
+      const navQuotaText = document.getElementById('nav-quota-text');
+      const remEl = document.getElementById('quota-scans-remaining');
+      const balEl = document.getElementById('quota-balance-usd');
+      const costEl = document.getElementById('quota-cost-per-scan');
+      const grantBtn = document.getElementById('btn-grant-balance-scope');
+
+      if (!state.pollinationsKey) {
+        if (navQuotaBadge) {
+          navQuotaBadge.classList.add('hidden');
+          navQuotaBadge.classList.remove('flex');
+        }
+        return;
+      }
+
+      if (navQuotaBadge) {
+        navQuotaBadge.classList.remove('hidden');
+        navQuotaBadge.classList.add('flex');
+      }
+
+      if (costEl) {
+        costEl.textContent = `$${state.estimatedCostPerScan.toFixed(4)}`;
+      }
+
+      if (statusMessage) {
+        if (navQuotaText) navQuotaText.textContent = statusMessage;
+        if (remEl) remEl.textContent = statusMessage;
+        return;
+      }
+
+      if (typeof state.balanceUsd === 'number' && !Number.isNaN(state.balanceUsd)) {
+        const remainingScans = Math.max(0, Math.floor(state.balanceUsd / state.estimatedCostPerScan));
+        const scanLabel = `Còn ~${remainingScans} lượt chấm`;
+        if (grantBtn) grantBtn.classList.add('hidden');
+        if (navQuotaText) {
+          navQuotaText.textContent = `Còn ~${remainingScans} lượt ($${state.balanceUsd.toFixed(3)})`;
+        }
+        if (remEl) {
+          remEl.textContent = scanLabel;
+          remEl.className =
+            remainingScans <= 2
+              ? 'font-mono font-black text-rose-400'
+              : 'font-mono font-black text-orange-400';
+        }
+        if (balEl) {
+          balEl.textContent = `$${state.balanceUsd.toFixed(4)} Pollen`;
+        }
+      } else {
+        if (grantBtn) grantBtn.classList.remove('hidden');
+        if (navQuotaText) navQuotaText.textContent = 'Chưa bật quyền số dư';
+        if (remEl) remEl.textContent = 'Chưa cấp quyền đọc số dư (vẫn quét bình thường)';
+        if (balEl) balEl.textContent = 'Bấm "Cấp quyền đọc số dư" để hiển thị';
+      }
+    }
+
+    async function fetchAccountBalanceAndScans(manualRefresh = false) {
+      if (!state.pollinationsKey) return null;
+      if (manualRefresh) {
+        updateQuotaDisplayUI('Đang cập nhật...');
+      }
+
+      try {
+        let detectedBalance = null;
+        const balResp = await fetch('https://gen.pollinations.ai/account/balance', {
+          headers: { Authorization: `Bearer ${state.pollinationsKey}` },
+        });
+        if (balResp.ok) {
+          const balData = await balResp.json();
+          const rawVal =
+            typeof balData === 'number'
+              ? balData
+              : balData.balance ?? balData.pollen ?? balData.credits ?? balData.remainingBudget ?? balData.amount;
+          if (rawVal !== undefined && rawVal !== null && !Number.isNaN(Number(rawVal))) {
+            detectedBalance = Number(rawVal);
+          }
+        }
+
+        if (detectedBalance === null) {
+          const keyResp = await fetch('https://gen.pollinations.ai/account/key', {
+            headers: { Authorization: `Bearer ${state.pollinationsKey}` },
+          });
+          if (keyResp.ok) {
+            const keyData = await keyResp.json();
+            const keyBudget = keyData.remainingBudget ?? keyData.pollenBudget ?? keyData.balance;
+            if (keyBudget !== undefined && keyBudget !== null && !Number.isNaN(Number(keyBudget))) {
+              detectedBalance = Number(keyBudget);
+            }
+          }
+        }
+
+        try {
+          const profResp = await fetch('https://gen.pollinations.ai/account/profile', {
+            headers: { Authorization: `Bearer ${state.pollinationsKey}` },
+          });
+          if (profResp.ok) {
+            const profData = await profResp.json();
+            const displayName = profData.name || profData.username || profData.email;
+            const navAuthText = document.getElementById('nav-auth-text');
+            if (displayName && navAuthText) {
+              navAuthText.textContent = displayName;
+            }
+          }
+        } catch (e) {
+          // Ignore optional profile lookup failure
+        }
+
+        state.balanceUsd = detectedBalance;
+        updateQuotaDisplayUI();
+        if (manualRefresh) {
+          playTone(700, 0.08);
+          if (detectedBalance !== null) {
+            const left = Math.max(0, Math.floor(detectedBalance / state.estimatedCostPerScan));
+            showToast(`Số dư hiện tại: $${detectedBalance.toFixed(4)} (Còn khoảng ${left} lượt chấm)`, '⚡');
+          } else {
+            showToast('Key hiện tại chưa bật quyền account:balance. Bấm "Cấp quyền đọc số dư" để kích hoạt!', '🔓');
+          }
+        }
+        return detectedBalance;
+      } catch (e) {
+        updateQuotaDisplayUI();
+        return null;
+      }
+    }
+
+    function grantBalanceReadPermission() {
+      playTone(680, 0.08);
+      if (window.location.protocol === 'file:') {
+        showToast('Trên file nội bộ, hãy vào enter.pollinations.ai/keys và bật mục account:balance cho Secret Key!', 'ℹ️');
+        window.open('https://enter.pollinations.ai/keys', '_blank', 'noopener,noreferrer');
+        return;
+      }
+      connectWithPollinationsOAuth();
+    }
+
+    function initAuthSession() {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const queryParams = new URLSearchParams(window.location.search);
+      const returnedKey =
+        hashParams.get('api_key') ||
+        hashParams.get('key') ||
+        queryParams.get('api_key') ||
+        queryParams.get('key');
+
+      if (returnedKey && returnedKey.trim().length > 8) {
+        state.pollinationsKey = returnedKey.trim();
+        localStorage.setItem('glowmax_pollinations_key', state.pollinationsKey);
+        try {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {
+          // Ignore replaceState restriction if any
+        }
+        showToast('Đăng nhập Google & kết nối Pollinations AI thành công!', '✅');
+      }
+
+      if (state.pollinationsKey) {
+        const navBadge = document.getElementById('nav-auth-badge');
+        navBadge.classList.remove('hidden');
+        navBadge.classList.add('flex');
+        switchView('upload');
+        fetchAccountBalanceAndScans(false);
+      } else {
+        switchView('login');
+      }
+    }
+
+    function connectWithPollinationsOAuth() {
+      playTone(680, 0.08);
+      if (window.location.protocol === 'file:') {
+        showToast('Bạn đang mở file nội bộ (file://). Hãy dán Secret Key (sk_...) bên dưới hoặc mở qua web HTTPS!', 'ℹ️');
+        const input = document.getElementById('manual-key-input');
+        if (input) input.focus();
+        return;
+      }
+      const redirectUrl = encodeURIComponent(window.location.origin + window.location.pathname);
+      window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${redirectUrl}&scope=profile%20usage&permissions=account:balance,account:usage`;
+    }
+
+    function toggleKeyVisibility() {
+      const input = document.getElementById('manual-key-input');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    async function saveAndVerifyManualKey() {
+      const input = document.getElementById('manual-key-input');
+      const key = (input.value || '').trim();
+      if (!key) {
+        showToast('Vui lòng nhập mã Secret Key (sk_...) từ enter.pollinations.ai!', '⚠️');
+        return;
+      }
+      if (key.startsWith('pk_')) {
+        showToast('Bạn đang nhập App Key (pk_...). Hãy dùng Secret Key (sk_...) ở tab Secret!', '⚠️');
+        return;
+      }
+
+      showToast('Đang xác thực kết nối Pollinations AI...', '⏳');
+      try {
+        const resp = await fetch('https://gen.pollinations.ai/v1/models', {
+          headers: { Authorization: `Bearer ${key}` },
+        });
+        if (!resp.ok) {
+          throw new Error(`Key không hợp lệ hoặc hết hạn (Mã ${resp.status})`);
+        }
+        state.pollinationsKey = key;
+        localStorage.setItem('glowmax_pollinations_key', key);
+        const navBadge = document.getElementById('nav-auth-badge');
+        navBadge.classList.remove('hidden');
+        navBadge.classList.add('flex');
+        playTone(760, 0.1);
+        showToast('Kết nối thành công! Hãy tải 2 góc ảnh để chấm OVR.', '✅');
+        switchView('upload');
+        fetchAccountBalanceAndScans(false);
+      } catch (err) {
+        showToast(err.message || 'Không thể xác thực Key. Vui lòng kiểm tra lại!', '❌');
+      }
+    }
+
+    function logoutPollinations() {
+      playTone(460, 0.08);
+      stopCamera();
+      state.pollinationsKey = '';
+      state.balanceUsd = null;
+      localStorage.removeItem('glowmax_pollinations_key');
+      const navBadge = document.getElementById('nav-auth-badge');
+      navBadge.classList.add('hidden');
+      navBadge.classList.remove('flex');
+      updateQuotaDisplayUI();
+      switchView('login');
+      showToast('Đã đăng xuất khỏi tài khoản.', '👋');
+    }
+
+    // ==================== 4. DUAL-SLOT CAPTURE CONTROLS, DRAG-DROP & WEBCAM ====================
+    function setGender(gender) {
+      state.gender = gender;
+      playTone(620, 0.06);
+      const mBtn = document.getElementById('btn-gender-male');
+      const fBtn = document.getElementById('btn-gender-female');
+      if (gender === 'male') {
+        mBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-orange-500/20 text-orange-200 border border-orange-500/45';
+        fBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-white/5 text-zinc-400 hover:text-white border border-white/10';
+      } else {
+        fBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-amber-500/20 text-amber-200 border border-amber-500/45';
+        mBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-white/5 text-zinc-400 hover:text-white border border-white/10';
+      }
+    }
+
+    function setAIMode(mode) {
+      state.aiMode = mode;
+      playTone(650, 0.06);
+      const sBtn = document.getElementById('btn-mode-strict');
+      const rBtn = document.getElementById('btn-mode-roast');
+      if (mode === 'strict') {
+        sBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-orange-500/20 text-orange-200 border border-orange-500/45';
+        rBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-white/5 text-zinc-400 hover:text-white border border-white/10';
+      } else {
+        rBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-rose-500/20 text-rose-200 border border-rose-400/40';
+        sBtn.className = 'py-2 px-2 rounded-xl text-xs font-bold transition bg-white/5 text-zinc-400 hover:text-white border border-white/10';
+      }
+    }
+
+    function setLockedModel(modelId) {
+      const allowed = ['openai', 'openai-fast', 'gemini-fast'];
+      state.lockedModel = allowed.includes(modelId) ? modelId : 'openai';
+      localStorage.setItem('glowmax_locked_model', state.lockedModel);
+      const sel = document.getElementById('locked-model-select');
+      if (sel) sel.value = state.lockedModel;
+      playTone(660, 0.06);
+      showToast(`Đã khóa cố định 100% vào mô hình: ${state.lockedModel}`, '🔒');
+    }
+
+    function setupSlotDropzone(slot) {
+      const dz = document.getElementById(`dropzone-${slot}`);
+      if (!dz) return;
+      dz.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dz.classList.add('border-orange-500', 'bg-orange-500/5');
+      });
+      dz.addEventListener('dragleave', () => {
+        dz.classList.remove('border-orange-500', 'bg-orange-500/5');
+      });
+      dz.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dz.classList.remove('border-orange-500', 'bg-orange-500/5');
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          loadSlotImageFile(file, slot);
+        } else {
+          showToast('Vui lòng thả tệp hình ảnh hợp lệ (JPG, PNG, WEBP).', '⚠️');
+        }
+      });
+    }
+    setupSlotDropzone('front');
+    setupSlotDropzone('profile');
+
+    function handleSlotFileSelect(event, slot) {
+      const file = event.target.files && event.target.files[0];
+      if (file) {
+        loadSlotImageFile(file, slot);
+        event.target.value = '';
+      }
+    }
+
+    function loadSlotImageFile(file, slot) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          setSlotCanvas(slot, img);
+          playTone(680, 0.08);
+        };
+        img.onerror = () => showToast('Không thể đọc tệp ảnh này. Hãy thử ảnh khác!', '⚠️');
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function setSlotCanvas(slot, sourceImgOrCanvas) {
+      const maxDim = 720;
+      const w = sourceImgOrCanvas.videoWidth || sourceImgOrCanvas.width;
+      const h = sourceImgOrCanvas.videoHeight || sourceImgOrCanvas.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      const cw = Math.round(w * scale);
+      const ch = Math.round(h * scale);
+
+      const off = document.createElement('canvas');
+      off.width = cw;
+      off.height = ch;
+      off.getContext('2d').drawImage(sourceImgOrCanvas, 0, 0, cw, ch);
+
+      if (slot === 'front') {
+        state.frontCanvas = off;
+      } else {
+        state.profileCanvas = off;
+      }
+
+      const thumb = document.getElementById(`thumb-canvas-${slot}`);
+      if (thumb) {
+        thumb.width = cw;
+        thumb.height = ch;
+        thumb.getContext('2d').drawImage(off, 0, 0);
+      }
+
+      const emptyBox = document.getElementById(`empty-slot-${slot}`);
+      const previewBox = document.getElementById(`preview-slot-${slot}`);
+      const statusBadge = document.getElementById(`status-badge-${slot}`);
+      if (emptyBox) emptyBox.classList.add('hidden');
+      if (previewBox) previewBox.classList.remove('hidden');
+      if (statusBadge) {
+        statusBadge.textContent = '✓ Đã sẵn sàng';
+        statusBadge.className = 'text-[11px] font-mono font-bold text-emerald-400';
+      }
+
+      updateDualScanButtonState();
+    }
+
+    function clearSlot(slot) {
+      playTone(460, 0.06);
+      if (slot === 'front') {
+        state.frontCanvas = null;
+      } else {
+        state.profileCanvas = null;
+      }
+
+      const emptyBox = document.getElementById(`empty-slot-${slot}`);
+      const previewBox = document.getElementById(`preview-slot-${slot}`);
+      const statusBadge = document.getElementById(`status-badge-${slot}`);
+      if (emptyBox) emptyBox.classList.remove('hidden');
+      if (previewBox) previewBox.classList.add('hidden');
+      if (statusBadge) {
+        statusBadge.textContent = 'Chưa có ảnh';
+        statusBadge.className = 'text-[11px] font-mono text-zinc-400';
+      }
+
+      updateDualScanButtonState();
+    }
+
+    function updateDualScanButtonState() {
+      const label = document.getElementById('btn-dual-scan-label');
+      if (!label) return;
+      const count = (state.frontCanvas ? 1 : 0) + (state.profileCanvas ? 1 : 0);
+      if (count === 2) {
+        label.textContent = 'Chấm Điểm OVR Tổng Hợp Ngay (2/2 Ảnh)';
+      } else if (count === 1) {
+        label.textContent = 'Chấm Điểm OVR Tổng Hợp (1/2 Ảnh — Thiếu 1 góc)';
+      } else {
+        label.textContent = 'Chấm Điểm OVR Tổng Hợp (Cần đủ 2 ảnh)';
+      }
+    }
+
+    async function startCameraForSlot(slot) {
+      state.activeCameraSlot = slot;
+      playTone(640, 0.06);
+
+      const camBox = document.getElementById('camera-box');
+      const targetBadge = document.getElementById('camera-target-badge');
+      const guideFront = document.getElementById('guide-front-oval');
+      const guideProfile = document.getElementById('guide-profile-line');
+
+      if (targetBadge) {
+        targetBadge.textContent =
+          slot === 'front' ? '📸 Đang chụp: 1. Ảnh Chính Diện' : '📸 Đang chụp: 2. Ảnh Góc Nghiêng 90°';
+      }
+      if (guideFront) guideFront.classList.toggle('hidden', slot !== 'front');
+      if (guideProfile) guideProfile.classList.toggle('hidden', slot !== 'profile');
+
+      try {
+        stopCamera(false);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
+          audio: false,
+        });
+        state.webcamStream = stream;
+        const video = document.getElementById('webcam-video');
+        video.srcObject = stream;
+        if (camBox) {
+          camBox.classList.remove('hidden');
+          camBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } catch (err) {
+        showToast('Không thể truy cập Camera. Hãy cấp quyền hoặc chọn ảnh từ máy!', '⚠️');
+      }
+    }
+
+    function stopCamera(hideBox = true) {
+      if (state.webcamStream) {
+        state.webcamStream.getTracks().forEach((t) => t.stop());
+        state.webcamStream = null;
+      }
+      if (hideBox) {
+        const camBox = document.getElementById('camera-box');
+        if (camBox) camBox.classList.add('hidden');
+      }
+    }
+
+    function captureWebcamPhoto() {
+      const video = document.getElementById('webcam-video');
+      if (!video || !video.videoWidth) {
+        showToast('Camera chưa sẵn sàng, vui lòng đợi 1 giây!', '⏳');
+        return;
+      }
+      const cap = document.createElement('canvas');
+      cap.width = video.videoWidth;
+      cap.height = video.videoHeight;
+      const ctx = cap.getContext('2d');
+      ctx.translate(cap.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, cap.width, cap.height);
+
+      setSlotCanvas(state.activeCameraSlot, cap);
+      stopCamera(true);
+      playTone(760, 0.09);
+      showToast(
+        state.activeCameraSlot === 'front'
+          ? 'Đã lưu Ảnh Chính Diện! Tiếp tục tải/chụp Ảnh Góc Nghiêng.'
+          : 'Đã lưu Ảnh Góc Nghiêng 90°!',
+        '📸'
+      );
+    }
+
+    function resetToUpload() {
+      stopCamera(true);
+      playTone(540, 0.06);
+      switchView('upload');
+    }
+
+    function runDualDemoSample(type) {
+      playTone(660, 0.08);
+      const isFlawed = type === 'flawed';
+
+      // Build Front Sample Canvas
+      const fCanvas = document.createElement('canvas');
+      fCanvas.width = 450;
+      fCanvas.height = 600;
+      const fCtx = fCanvas.getContext('2d');
+      fCtx.fillStyle = '#18181b';
+      fCtx.fillRect(0, 0, 450, 600);
+
+      // Neck & Shoulders
+      fCtx.fillStyle = '#d4a373';
+      fCtx.fillRect(175, 380, 100, 140);
+      fCtx.fillStyle = '#27272a';
+      fCtx.beginPath();
+      fCtx.ellipse(225, 560, 165, 95, 0, Math.PI, Math.PI * 2);
+      fCtx.fill();
+
+      // Head & Jaw
+      fCtx.fillStyle = '#e6b88a';
+      fCtx.beginPath();
+      fCtx.moveTo(130, 210);
+      fCtx.quadraticCurveTo(130, 105, 225, 105);
+      fCtx.quadraticCurveTo(320, 105, 320, 210);
+      if (isFlawed) {
+        fCtx.quadraticCurveTo(328, 345, 225, 425);
+        fCtx.quadraticCurveTo(122, 345, 130, 210);
+      } else {
+        fCtx.lineTo(306, 335);
+        fCtx.lineTo(225, 412);
+        fCtx.lineTo(144, 335);
+        fCtx.closePath();
+      }
+      fCtx.fill();
+
+      // Hair
+      fCtx.fillStyle = '#1c1917';
+      fCtx.beginPath();
+      fCtx.ellipse(225, 135, 102, 56, 0, Math.PI, Math.PI * 2);
+      fCtx.fill();
+
+      // Eyes & Brows
+      fCtx.fillStyle = '#1c1917';
+      fCtx.fillRect(156, 212, 48, 8);
+      fCtx.fillRect(246, 212, 48, 8);
+      fCtx.fillStyle = '#ffffff';
+      fCtx.beginPath();
+      fCtx.ellipse(180, 232, 18, 9, -0.06, 0, Math.PI * 2);
+      fCtx.ellipse(270, 232, 18, 9, 0.06, 0, Math.PI * 2);
+      fCtx.fill();
+      fCtx.fillStyle = '#292524';
+      fCtx.beginPath();
+      fCtx.arc(180, 232, 6, 0, Math.PI * 2);
+      fCtx.arc(270, 232, 6, 0, Math.PI * 2);
+      fCtx.fill();
+
+      // Nose & Mouth
+      fCtx.strokeStyle = '#a16207';
+      fCtx.lineWidth = 3;
+      fCtx.beginPath();
+      fCtx.moveTo(225, 234);
+      fCtx.lineTo(219, 294);
+      fCtx.lineTo(234, 296);
+      fCtx.stroke();
+
+      fCtx.fillStyle = '#b91c1c';
+      fCtx.beginPath();
+      fCtx.ellipse(225, 342, 26, 8, 0, 0, Math.PI * 2);
+      fCtx.fill();
+
+      if (isFlawed) {
+        fCtx.fillStyle = 'rgba(220, 38, 38, 0.65)';
+        [
+          [165, 285],
+          [174, 302],
+          [282, 290],
+          [272, 312],
+          [225, 376],
+        ].forEach(([bx, by]) => {
+          fCtx.beginPath();
+          fCtx.arc(bx, by, 5, 0, Math.PI * 2);
+          fCtx.fill();
+        });
+      }
+
+      // Build Side Profile Sample Canvas
+      const pCanvas = document.createElement('canvas');
+      pCanvas.width = 450;
+      pCanvas.height = 600;
+      const pCtx = pCanvas.getContext('2d');
+      pCtx.fillStyle = '#18181b';
+      pCtx.fillRect(0, 0, 450, 600);
+
+      pCtx.fillStyle = '#e6b88a';
+      pCtx.beginPath();
+      pCtx.moveTo(155, 130);
+      pCtx.quadraticCurveTo(285, 115, 298, 225);
+      pCtx.lineTo(334, 286); // Nose tip
+      pCtx.lineTo(304, 298);
+      pCtx.lineTo(314, 325); // Upper lip
+      pCtx.lineTo(310, 348); // Lower lip
+      if (isFlawed) {
+        pCtx.lineTo(284, 385); // Recessed chin
+        pCtx.quadraticCurveTo(255, 428, 175, 435); // Submental fat / double chin
+      } else {
+        pCtx.lineTo(308, 392); // Strong projected chin
+        pCtx.lineTo(212, 396); // Tight submental
+      }
+      pCtx.lineTo(192, 515);
+      pCtx.lineTo(135, 515);
+      pCtx.closePath();
+      pCtx.fill();
+
+      pCtx.fillStyle = '#1c1917';
+      pCtx.beginPath();
+      pCtx.ellipse(215, 152, 85, 58, -0.2, Math.PI * 0.85, Math.PI * 2.05);
+      pCtx.fill();
+
+      setSlotCanvas('front', fCanvas);
+      setSlotCanvas('profile', pCanvas);
+      startBiometricScan(false);
+    }
+
+    // ==================== 5. MEDIAPIPE LANDMARKS & IMAGE PREPROCESSING ====================
+    function compressCanvasForAI(sourceCanvas) {
+      const sw = sourceCanvas.width;
+      const sh = sourceCanvas.height;
+      const sCtx = sourceCanvas.getContext('2d');
+      const imgData = sCtx.getImageData(0, 0, sw, sh).data;
+
+      const rowIsDark = (y) => {
+        let sum = 0;
+        let samples = 0;
+        for (let x = 0; x < sw; x += 6) {
+          const idx = (y * sw + x) * 4;
+          sum += (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
+          samples++;
+        }
+        return samples > 0 && sum / samples < 16;
+      };
+
+      const colIsDark = (x) => {
+        let sum = 0;
+        let samples = 0;
+        for (let y = 0; y < sh; y += 6) {
+          const idx = (y * sw + x) * 4;
+          sum += (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
+          samples++;
+        }
+        return samples > 0 && sum / samples < 16;
+      };
+
+      let top = 0;
+      let bottom = sh - 1;
+      let left = 0;
+      let right = sw - 1;
+
+      while (top < sh * 0.35 && rowIsDark(top)) top++;
+      while (bottom > sh * 0.65 && rowIsDark(bottom)) bottom--;
+      while (left < sw * 0.3 && colIsDark(left)) left++;
+      while (right > sw * 0.7 && colIsDark(right)) right--;
+
+      const cropW = Math.max(64, right - left + 1);
+      const cropH = Math.max(64, bottom - top + 1);
+
+      const targetW = Math.min(480, cropW);
+      const targetH = Math.round((cropH / cropW) * targetW);
+
+      const tmp = document.createElement('canvas');
+      tmp.width = targetW;
+      tmp.height = targetH;
+      tmp.getContext('2d').drawImage(sourceCanvas, left, top, cropW, cropH, 0, 0, targetW, targetH);
+      return tmp.toDataURL('image/jpeg', 0.86);
+    }
+
+    async function detectMediaPipeLandmarks(canvas) {
+      state.landmarks = null;
+      state.isRealMediaPipe = false;
+      if (typeof window.FaceMesh === 'undefined' || !canvas) return;
+
+      try {
+        if (!state.faceMeshInstance) {
+          state.faceMeshInstance = new window.FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+          });
+          state.faceMeshInstance.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+          });
+        }
+
+        await new Promise((resolve) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              resolve();
+            }
+          }, 2500);
+
+          state.faceMeshInstance.onResults((results) => {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              if (results && results.multiFaceLandmarks && results.multiFaceLandmarks[0]) {
+                state.landmarks = results.multiFaceLandmarks[0];
+                state.isRealMediaPipe = true;
+              }
+              resolve();
+            }
+          });
+
+          state.faceMeshInstance.send({ image: canvas }).catch(() => {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          });
+        });
+      } catch (e) {
+        // Fallback smoothly to geometric guide lines
+      }
+    }
+
+    // ==================== 6. MASTER DUAL-ANGLE SCAN ORCHESTRATOR ====================
+    async function startBiometricScan(bypassCache = false) {
+      if (!state.pollinationsKey) {
+        showToast('Vui lòng đăng nhập Pollinations AI trước khi quét!', '⚠️');
+        switchView('login');
+        return;
+      }
+
+      if (!state.frontCanvas || !state.profileCanvas) {
+        playTone(420, 0.1);
+        const missingMsg = !state.frontCanvas && !state.profileCanvas
+          ? 'Vui lòng tải lên hoặc chụp đủ cả 2 ảnh (Chính diện & Góc nghiêng 90°)!'
+          : !state.frontCanvas
+          ? 'Bạn còn thiếu 1. Ảnh Chính Diện (Front)!'
+          : 'Bạn còn thiếu 2. Ảnh Góc Nghiêng 90° (Side Profile)!';
+        showToast(missingMsg, '⚠️');
+        return;
+      }
+
+      const { hexHash, numericSeed } = computeDualImageFingerprint(state.frontCanvas, state.profileCanvas);
+      const cacheKey = `${hexHash}_${state.gender}_${state.aiMode}_${state.lockedModel}`;
+
+      if (!bypassCache) {
+        const cached = getCachedAnalysis(cacheKey);
+        if (cached) {
+          const cachedResult = { ...cached, fromCache: true };
+          state.analysisResult = cachedResult;
+          await detectMediaPipeLandmarks(state.frontCanvas);
+          switchView('results');
+          renderResults(cachedResult);
+          playTone(760, 0.1);
+          showToast('Đã đồng bộ kết quả nhất quán cho bộ ảnh này (0 token)!', '🔒');
+          return;
+        }
+      }
+
+      playTone(680, 0.08);
+      switchView('scanning');
+
+      const prevFront = document.getElementById('scanning-preview-front');
+      const prevProf = document.getElementById('scanning-preview-profile');
+      if (prevFront) {
+        prevFront.width = state.frontCanvas.width;
+        prevFront.height = state.frontCanvas.height;
+        prevFront.getContext('2d').drawImage(state.frontCanvas, 0, 0);
+      }
+      if (prevProf) {
+        prevProf.width = state.profileCanvas.width;
+        prevProf.height = state.profileCanvas.height;
+        prevProf.getContext('2d').drawImage(state.profileCanvas, 0, 0);
+      }
+
+      const titleEl = document.getElementById('scan-status-title');
+      const subEl = document.getElementById('scan-status-sub');
+      if (titleEl) titleEl.textContent = `Mô hình [${state.lockedModel}] đang quét 2 góc mặt...`;
+      if (subEl) subEl.textContent = `Đối chiếu Bảng Chuẩn 7 Rank + Chính Diện + Góc Nghiêng (Seed #${numericSeed})`;
+
+      try {
+        const prevBalance = state.balanceUsd;
+        await detectMediaPipeLandmarks(state.frontCanvas);
+        const result = await analyzeDualFaceWithPollinationsAI(state.frontCanvas, state.profileCanvas, numericSeed);
+        result.fromCache = false;
+
+        saveCachedAnalysis(cacheKey, result);
+        state.analysisResult = result;
+
+        // Refresh balance and calibrate actual per-scan cost
+        const newBalance = await fetchAccountBalanceAndScans(false);
+        if (
+          typeof prevBalance === 'number' &&
+          typeof newBalance === 'number' &&
+          prevBalance - newBalance > 0.0001 &&
+          prevBalance - newBalance < 0.05
+        ) {
+          state.estimatedCostPerScan = Number((prevBalance - newBalance).toFixed(5));
+          localStorage.setItem('glowmax_cost_per_scan', String(state.estimatedCostPerScan));
+          updateQuotaDisplayUI();
+        }
+
+        switchView('results');
+        renderResults(result);
+        playTone(820, 0.12);
+      } catch (err) {
+        switchView('upload');
+        playTone(360, 0.14);
+        showToast(err.message || 'Lỗi kết nối AI. Vui lòng thử lại!', '❌');
+      }
+    }
+
+    // ==================== 7. 7-TIER VISUAL REFERENCE CHART & VISION AI ENGINE ====================
+    function buildRankReferenceChartDataUrl() {
+      if (cachedRankChartDataUrl) return cachedRankChartDataUrl;
+
+      const c = document.createElement('canvas');
+      c.width = 450;
+      c.height = 620;
+      const ctx = c.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, c.width, c.height);
+
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('PSL VISUAL RANK REFERENCE CHART (LOWEST TO APEX)', c.width / 2, 20);
+
+      const drawSketchFace = (cx, cy, cfg) => {
+        ctx.save();
+        ctx.strokeStyle = '#111111';
+        ctx.fillStyle = '#ffffff';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Neck & Shoulders
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cx - cfg.neckW, cy + 40);
+        ctx.lineTo(cx - cfg.neckW - 2, cy + 68);
+        ctx.quadraticCurveTo(cx - 46, cy + 72, cx - 56, cy + 78);
+        ctx.moveTo(cx + cfg.neckW, cy + 40);
+        ctx.lineTo(cx + cfg.neckW + 2, cy + 68);
+        ctx.quadraticCurveTo(cx + 46, cy + 72, cx + 56, cy + 78);
+        ctx.stroke();
+
+        // Ears
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.ellipse(cx - cfg.cheekW - 2, cy + 4 + (cfg.asym || 0), 4.5, 11, -0.1, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(cx + cfg.cheekW + 2, cy + 4 - (cfg.asym || 0), 4.5, 11, 0.1, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Cranium & Jawline contour
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cx - cfg.cheekW, cy - 12);
+        ctx.quadraticCurveTo(cx - cfg.cheekW, cy - 46, cx, cy - 46);
+        ctx.quadraticCurveTo(cx + cfg.cheekW, cy - 46, cx + cfg.cheekW, cy - 12);
+
+        if (cfg.jawStyle === 'recessed_aged') {
+          ctx.quadraticCurveTo(cx + cfg.cheekW + 2, cy + 16, cx + 22, cy + 34);
+          ctx.quadraticCurveTo(cx, cy + 47, cx - 20, cy + 36);
+          ctx.quadraticCurveTo(cx - cfg.cheekW - 3, cy + 16, cx - cfg.cheekW, cy - 12);
+        } else if (cfg.jawStyle === 'round_soft') {
+          ctx.quadraticCurveTo(cx + cfg.cheekW + 4, cy + 22, cx + 18, cy + 42);
+          ctx.quadraticCurveTo(cx, cy + 50, cx - 18, cy + 42);
+          ctx.quadraticCurveTo(cx - cfg.cheekW - 4, cy + 22, cx - cfg.cheekW, cy - 12);
+        } else if (cfg.jawStyle === 'soft_narrow') {
+          ctx.lineTo(cx + cfg.jawW, cy + 22);
+          ctx.quadraticCurveTo(cx + 14, cy + 44, cx, cy + 46);
+          ctx.quadraticCurveTo(cx - 14, cy + 44, cx - cfg.jawW, cy + 22);
+          ctx.lineTo(cx - cfg.cheekW, cy - 12);
+        } else if (cfg.jawStyle === 'clean_taper') {
+          ctx.lineTo(cx + cfg.jawW, cy + 23);
+          ctx.lineTo(cx + 12, cy + 45);
+          ctx.lineTo(cx - 12, cy + 45);
+          ctx.lineTo(cx - cfg.jawW, cy + 23);
+          ctx.lineTo(cx - cfg.cheekW, cy - 12);
+        } else {
+          ctx.lineTo(cx + cfg.cheekW - 2, cy + 5);
+          ctx.lineTo(cx + cfg.jawW, cy + 25);
+          ctx.lineTo(cx + 13, cy + 46);
+          ctx.lineTo(cx - 13, cy + 46);
+          ctx.lineTo(cx - cfg.jawW, cy + 25);
+          ctx.lineTo(cx - cfg.cheekW + 2, cy + 5);
+          ctx.lineTo(cx - cfg.cheekW, cy - 12);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        if (cfg.hollowCheeks) {
+          ctx.strokeStyle = 'rgba(17,17,17,0.45)';
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.moveTo(cx - cfg.cheekW + 5, cy + 6);
+          ctx.lineTo(cx - cfg.jawW + 6, cy + 24);
+          ctx.moveTo(cx + cfg.cheekW - 5, cy + 6);
+          ctx.lineTo(cx + cfg.jawW - 6, cy + 24);
+          ctx.stroke();
+          ctx.strokeStyle = '#111111';
+        }
+
+        const eyeY = cy - 4;
+        const eyeSpan = 14;
+        ctx.lineWidth = cfg.browThick;
+        ctx.beginPath();
+        ctx.moveTo(cx - eyeSpan - 8, eyeY - 7 + cfg.browTilt);
+        ctx.lineTo(cx - eyeSpan + 7, eyeY - 7 - cfg.browTilt);
+        ctx.moveTo(cx + eyeSpan - 7, eyeY - 7 - cfg.browTilt);
+        ctx.lineTo(cx + eyeSpan + 8, eyeY - 7 + cfg.browTilt);
+        ctx.stroke();
+
+        [-1, 1].forEach((side) => {
+          const ex = cx + side * eyeSpan;
+          const ey = eyeY + (side === -1 ? cfg.asym || 0 : 0);
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, 6.5, cfg.eyeH, side * cfg.canthalTilt, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = '#111111';
+          ctx.beginPath();
+          ctx.arc(ex, ey, Math.min(3.2, cfg.eyeH * 0.85), 0, Math.PI * 2);
+          ctx.fill();
+
+          if (cfg.eyeBags) {
+            ctx.strokeStyle = 'rgba(17,17,17,0.55)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(ex, ey + 2.5, 6.2, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+            ctx.strokeStyle = '#111111';
+          }
+        });
+
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        if (cfg.bulbousNose) {
+          ctx.moveTo(cx - 2, eyeY + 2);
+          ctx.lineTo(cx - 4, cy + 14);
+          ctx.quadraticCurveTo(cx, cy + 18, cx + 5, cy + 14);
+          ctx.arc(cx, cy + 14, 5.5, 0.1, Math.PI - 0.1);
+        } else {
+          ctx.moveTo(cx - 1.5, eyeY + 1);
+          ctx.lineTo(cx - 2.2, cy + 14);
+          ctx.lineTo(cx + 2.5, cy + 15);
+        }
+        ctx.stroke();
+
+        const mouthY = cy + 27;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (cfg.frown) {
+          ctx.moveTo(cx - 10, mouthY + 2);
+          ctx.quadraticCurveTo(cx, mouthY - 2, cx + 10, mouthY + 2);
+        } else {
+          ctx.moveTo(cx - 11, mouthY);
+          ctx.quadraticCurveTo(cx, mouthY + 1.5, cx + 11, mouthY);
+        }
+        ctx.stroke();
+
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, mouthY + 5);
+        ctx.lineTo(cx + 5, mouthY + 5);
+        ctx.stroke();
+
+        if (cfg.blemishes) {
+          ctx.fillStyle = '#222222';
+          [
+            [-16, -24],
+            [14, -22],
+            [-21, 14],
+            [19, 18],
+            [-6, 36],
+            [7, 35],
+          ].forEach(([bx, by]) => {
+            ctx.beginPath();
+            ctx.arc(cx + bx, cy + by, 1.3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        ctx.fillStyle = '#141414';
+        ctx.strokeStyle = '#111111';
+        if (cfg.hair === 'thin_receding') {
+          ctx.lineWidth = 1.3;
+          for (let hx = -26; hx <= 26; hx += 4) {
+            ctx.beginPath();
+            ctx.moveTo(cx + hx, cy - 30);
+            ctx.lineTo(cx + hx * 1.05, cy - 49);
+            ctx.stroke();
+          }
+        } else if (cfg.hair === 'bowl_crop') {
+          ctx.beginPath();
+          ctx.moveTo(cx - cfg.cheekW - 2, cy - 10);
+          ctx.quadraticCurveTo(cx - cfg.cheekW - 4, cy - 54, cx, cy - 54);
+          ctx.quadraticCurveTo(cx + cfg.cheekW + 4, cy - 54, cx + cfg.cheekW + 2, cy - 10);
+          ctx.quadraticCurveTo(cx + 15, cy - 22, cx, cy - 18);
+          ctx.quadraticCurveTo(cx - 15, cy - 22, cx - cfg.cheekW - 2, cy - 10);
+          ctx.fill();
+        } else if (cfg.hair === 'textured_volume') {
+          ctx.beginPath();
+          ctx.moveTo(cx - cfg.cheekW - 4, cy - 6);
+          ctx.quadraticCurveTo(cx - 42, cy - 58, cx, cy - 56);
+          ctx.quadraticCurveTo(cx + 42, cy - 58, cx + cfg.cheekW + 4, cy - 6);
+          ctx.quadraticCurveTo(cx + 14, cy - 16, cx, cy - 14);
+          ctx.quadraticCurveTo(cx - 14, cy - 16, cx - cfg.cheekW - 4, cy - 6);
+          ctx.fill();
+        } else if (cfg.hair === 'long_flow') {
+          ctx.beginPath();
+          ctx.moveTo(cx - 26, cy - 15);
+          ctx.lineTo(cx - 38, cy + 56);
+          ctx.lineTo(cx - 22, cy + 52);
+          ctx.lineTo(cx - 24, cy - 8);
+          ctx.quadraticCurveTo(cx, cy - 20, cx + 24, cy - 8);
+          ctx.lineTo(cx + 22, cy + 52);
+          ctx.lineTo(cx + 38, cy + 56);
+          ctx.lineTo(cx + 26, cy - 15);
+          ctx.quadraticCurveTo(cx + 36, cy - 60, cx, cy - 60);
+          ctx.quadraticCurveTo(cx - 36, cy - 60, cx - 26, cy - 15);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#000000';
+        ctx.font = '900 16px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(cfg.label, cx, cy + 98);
+
+        ctx.fillStyle = '#4b5563';
+        ctx.font = 'bold 10px JetBrains Mono, monospace';
+        ctx.fillText(cfg.scoreHint, cx, cy + 112);
+
+        ctx.restore();
+      };
+
+      const tiers = [
+        {
+          cx: 80,
+          cy: 95,
+          label: 'sub 3',
+          scoreHint: 'OVR 1-29',
+          cheekW: 28,
+          jawW: 20,
+          neckW: 13,
+          jawStyle: 'recessed_aged',
+          asym: 2.2,
+          browThick: 1.5,
+          browTilt: -2.2,
+          eyeH: 4.5,
+          canthalTilt: -0.22,
+          eyeBags: true,
+          bulbousNose: true,
+          frown: true,
+          blemishes: true,
+          hair: 'thin_receding',
+        },
+        {
+          cx: 225,
+          cy: 95,
+          label: 'sub 5',
+          scoreHint: 'OVR 30-41',
+          cheekW: 31,
+          jawW: 23,
+          neckW: 15,
+          jawStyle: 'round_soft',
+          asym: 0.8,
+          browThick: 1.8,
+          browTilt: -1.0,
+          eyeH: 4.6,
+          canthalTilt: -0.08,
+          eyeBags: true,
+          bulbousNose: true,
+          frown: true,
+          blemishes: true,
+          hair: 'bowl_crop',
+        },
+        {
+          cx: 370,
+          cy: 95,
+          label: 'ltn',
+          scoreHint: 'OVR 42-49',
+          cheekW: 29,
+          jawW: 22,
+          neckW: 15,
+          jawStyle: 'soft_narrow',
+          asym: 0,
+          browThick: 2.0,
+          browTilt: -0.3,
+          eyeH: 4.2,
+          canthalTilt: 0.0,
+          eyeBags: false,
+          bulbousNose: false,
+          frown: false,
+          blemishes: false,
+          hair: 'bowl_crop',
+        },
+        {
+          cx: 80,
+          cy: 285,
+          label: 'mtn',
+          scoreHint: 'OVR 50-62',
+          cheekW: 30,
+          jawW: 24,
+          neckW: 16,
+          jawStyle: 'soft_narrow',
+          asym: 0,
+          browThick: 2.2,
+          browTilt: 0.3,
+          eyeH: 4.0,
+          canthalTilt: 0.05,
+          eyeBags: false,
+          bulbousNose: false,
+          frown: false,
+          blemishes: false,
+          hair: 'bowl_crop',
+        },
+        {
+          cx: 225,
+          cy: 285,
+          label: 'htn',
+          scoreHint: 'OVR 63-73',
+          cheekW: 30,
+          jawW: 26,
+          neckW: 17,
+          jawStyle: 'clean_taper',
+          asym: 0,
+          browThick: 2.5,
+          browTilt: 0.8,
+          eyeH: 3.6,
+          canthalTilt: 0.1,
+          eyeBags: false,
+          bulbousNose: false,
+          frown: false,
+          blemishes: false,
+          hair: 'textured_volume',
+        },
+        {
+          cx: 370,
+          cy: 285,
+          label: 'chad',
+          scoreHint: 'OVR 74-89',
+          cheekW: 31,
+          jawW: 28,
+          neckW: 19,
+          jawStyle: 'sharp_angular',
+          hollowCheeks: true,
+          asym: 0,
+          browThick: 3.0,
+          browTilt: 1.4,
+          eyeH: 3.0,
+          canthalTilt: 0.16,
+          eyeBags: false,
+          bulbousNose: false,
+          frown: false,
+          blemishes: false,
+          hair: 'textured_volume',
+        },
+        {
+          cx: 225,
+          cy: 475,
+          label: 'true adam',
+          scoreHint: 'OVR 90-100',
+          cheekW: 31,
+          jawW: 29,
+          neckW: 20,
+          jawStyle: 'sharp_angular',
+          hollowCheeks: true,
+          asym: 0,
+          browThick: 3.2,
+          browTilt: 1.6,
+          eyeH: 2.8,
+          canthalTilt: 0.18,
+          eyeBags: false,
+          bulbousNose: false,
+          frown: false,
+          blemishes: false,
+          hair: 'long_flow',
+        },
+      ];
+
+      tiers.forEach((t) => drawSketchFace(t.cx, t.cy, t));
+
+      cachedRankChartDataUrl = c.toDataURL('image/jpeg', 0.85);
+      return cachedRankChartDataUrl;
+    }
+
+    function classifyScoreTier(score, gender) {
+      const isMale = gender === 'male';
+      if (score < 30) {
+        return { code: 'SUB 3', label: 'Dưới chuẩn nặng', color: '#F43F5E', percentile: 'Bottom 5%' };
+      }
+      if (score < 42) {
+        return { code: 'SUB 5', label: 'Dưới chuẩn rõ rệt', color: '#FB7185', percentile: 'Bottom 18%' };
+      }
+      if (score < 50) {
+        return { code: 'LTN', label: 'Dưới trung bình nhẹ', color: '#F59E0B', percentile: 'Bottom 35%' };
+      }
+      if (score < 63) {
+        return { code: 'MTN', label: 'Trung bình phổ thông', color: '#A1A1AA', percentile: 'Top 50%' };
+      }
+      if (score < 74) {
+        return { code: 'HTN', label: 'Trên trung bình', color: '#FF6B00', percentile: 'Top 15%' };
+      }
+      if (score < 90) {
+        return {
+          code: isMale ? 'CHAD' : 'STACY',
+          label: 'Rất thu hút / Góc cạnh',
+          color: '#FBBF24',
+          percentile: 'Top 2%',
+        };
+      }
+      return {
+        code: isMale ? 'TRUE ADAM' : 'TRUE EVE',
+        label: 'Cực phẩm đỉnh cao tuyệt đối',
+        color: '#10B981',
+        percentile: 'Top 0.1%',
+      };
+    }
+
+    async function analyzeDualFaceWithPollinationsAI(frontCanvas, profileCanvas, numericSeed) {
+      const rankChartDataUrl = buildRankReferenceChartDataUrl();
+      const frontDataUrl = compressCanvasForAI(frontCanvas);
+      const profileDataUrl = compressCanvasForAI(profileCanvas);
+      const genderLabel = state.gender === 'male' ? 'Nam giới (Masculine)' : 'Nữ giới (Feminine)';
+      const toneInstruction =
+        state.aiMode === 'roast'
+          ? 'Phong cách nhận xét: ROAST SẮC BÉN, hài hước thực tế nhưng công tâm tuyệt đối về cấu trúc xương; khen đúng nét đẹp góc cạnh nổi bật và chỉ thẳng điểm trừ thật nếu có.'
+          : 'Phong cách nhận xét: CHUYÊN GIA NHÂN TRẮC HỌC & THẨM MỸ 3D LẠNH LÙNG, CÔNG TÂM NHƯ CÁC ỨNG DỤNG CHẤM PSL CHUYÊN SÂU.';
+
+      const systemPrompt = `Bạn là hệ thống kiểm toán nhân trắc học và thẩm mỹ khuôn mặt 3D chuẩn PSL / OVR của GlowMax AI (thang điểm OVR 1–100, quy đổi tương đương thang PSL 1.0–8.5+).
+Mỗi lần chấm, bạn được cung cấp 3 hình ảnh:
+- ẢNH 1: Bảng Chuẩn Phân Hạng 7 Cấp Độ Trực Quan từ thấp đến đỉnh cao gồm: SUB 3 (1–29đ) → SUB 5 (30–41đ) → LTN (42–49đ) → MTN (50–62đ) → HTN (63–73đ) → CHAD (74–89đ) → TRUE ADAM (90–100đ).
+- ẢNH 2: Ảnh Góc Chính Diện (Frontal) của người cần chấm.
+- ẢNH 3: Ảnh Góc Nghiêng 90° (Side Profile) của người cần chấm.
+
+Hãy đối chiếu trực tiếp cấu trúc xương, độ góc cạnh hàm, gò má, hốc mắt và tỷ lệ của người trong Ảnh 2 & Ảnh 3 với 7 hình mẫu trong Ảnh 1 để xếp đúng bậc rank!
+${toneInstruction}
+
+I. QUY TẮC TÁCH BIỆT GIẢI PHẪU THẬT & NHIỄU ẢNH (BẮT BUỘC):
+1. Miễn nhiễm nhiễu kỹ thuật (Photo Artifact Immunity): Tuyệt đối KHÔNG trừ điểm cấu trúc khuôn mặt vì ánh sáng phòng tối, bóng đổ góc cạnh, ảnh chụp màn hình có viền đen, độ phân giải camera trung bình, tóc rủ tự nhiên hoặc vật thể cầm trên tay. Hãy nhìn xuyên qua ánh sáng để đọc đúng hình khối xương 3D bên dưới.
+2. Phân tách Khung Xương (70% trọng số) và Mô Mềm / Da Liễu (30% trọng số):
+   - Khung xương & Độ góc cạnh (boneStructureScore): Đánh giá độ sắc của viền xương hàm dưới (Mandibular border), góc hàm (Gonial angle), độ hõm dưới gò má (Ogee curve / Hollow cheeks), độ nhô tầng giữa & cằm so với đường thẩm mỹ E-Line, độ sâu hốc mắt (Hunter/Almond eyes) và tỷ lệ FWHR. Một khuôn mặt có xương hàm sắc cạnh rõ nét và má hóp tự nhiên BẮT BUỘC phải được xếp vào nhóm CHAD / TRUE ADAM (74–96 điểm), không bao giờ được đánh rớt xuống MTN/HTN chỉ vì ánh sáng tối hay 1–2 nốt mụn nhỏ.
+   - Mô mềm & Da liễu (softTissueAndSkinScore): Đánh giá mỡ thừa dưới cằm (nọng cằm / submental fat), bọng mắt, mụn viêm lan rộng, sẹo rỗ. Nếu có 1 miếng dán mụn nhỏ lẻ trên nền da sạch, chỉ trừ 2–3 điểm ở mục da. Nếu nọng cằm dày che mất góc cổ–hàm hoặc mụn viêm nặng toàn mặt, phải trừ thẳng 10–22 điểm.
+
+II. THANG NEO 7 CẤP ĐỘ RANK KHỚP VỚI ẢNH 1 (CALIBRATION ANCHORS):
+- 90 – 100 điểm (PSL 7.5 – 8.5+ | TRUE ADAM / TRUE EVE — Top 0.1%): Đỉnh cao tuyệt đối như hình "true adam" ở đáy Ảnh 1. Cấu trúc xương hoàn mỹ như tạc, viền hàm và góc Gonial sắc như dao cạo, má hóp sâu, mắt Hunter eyes sắc bén, E-Line chuẩn tuyệt đối.
+- 74 – 89 điểm (PSL 6.0 – 7.4 | CHAD / STACY — Top 2%): Tương đương hình "chad" trong Ảnh 1. Xương hàm vuông sắc nét rõ rệt ở cả chính diện lẫn góc nghiêng 90°, gò má cao có độ hõm (Ogee curve), mắt sâu nam tính/thu hút, góc cổ–hàm siết chặt.
+- 63 – 73 điểm (PSL 5.2 – 5.9 | HTN — Top 15%): Tương đương hình "htn" trong Ảnh 1. Trên trung bình rõ rệt, khung mặt gọn gàng cân đối, cằm và môi hài hòa với E-Line, mắt sáng, da sạch nhưng chưa đạt độ sắc cạnh góc hàm cực đại như Chad.
+- 50 – 62 điểm (PSL 4.5 – 5.1 | MTN — Top 50%): Tương đương hình "mtn" trong Ảnh 1. Mức trung bình phổ thông, đường nét hài hòa cơ bản nhưng viền hàm mềm, thiếu khối góc cạnh 3D.
+- 42 – 49 điểm (PSL 4.0 – 4.4 | LTN — Bottom 35%): Tương đương hình "ltn" trong Ảnh 1. Dưới trung bình nhẹ, hàm hẹp hoặc mềm, đường nét hiền thiếu độ sắc sảo.
+- 30 – 41 điểm (PSL 3.0 – 3.9 | SUB 5 — Bottom 18%): Tương đương hình "sub 5" trong Ảnh 1. Mặt tròn đầy hoặc cằm/hàm lẹm rõ, có nọng cằm mức vừa, bọng mắt hoặc khuyết điểm da.
+- 1 – 29 điểm (PSL < 3.0 | SUB 3 — Bottom 5%): Tương đương hình "sub 3" trong Ảnh 1. Bất đối xứng nặng, mắt trễ/bọng lớn, nọng cằm dày che góc cổ–hàm, cằm lẹm sâu hoặc da mụn viêm/lão hóa nặng.
+
+III. QUY TRÌNH ĐO LƯỜNG TRƯỚC KHI CHỐT ĐIỂM:
+Bước 1: Liệt kê 3 điểm mạnh cấu trúc xương/mắt/da nổi bật nhất trong "detectedStrengths".
+Bước 2: Liệt kê các khuyết điểm giải phẫu/da liễu có thật trong "detectedFlaws" (nếu khuôn mặt rất đẹp và không có lỗi lớn, chỉ ghi 1–2 lưu ý nhỏ).
+Bước 3: Chấm điểm tách biệt "boneStructureScore" (1–100) và "softTissueAndSkinScore" (1–100), sau đó tính "ovrScore" (70% xương + 30% mô mềm/da) khớp với 7 bậc rank ở Ảnh 1 và quy đổi ra "pslEquivalent" (1.5–8.5).
+
+CHỈ TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON HỢP LỆ (không markdown, không giải thích ngoài JSON) với cấu trúc:
+{
+  "angularityLevel": "<Cực kỳ góc cạnh (Model-tier) | Góc cạnh sắc nét | Hài hòa gọn gàng | Mềm mại trung bình | Tròn / Thiếu góc cạnh>",
+  "boneStructureScore": <số nguyên 1-100 điểm khung xương & độ góc cạnh>,
+  "softTissueAndSkinScore": <số nguyên 1-100 điểm mô mềm, độ săn cổ-hàm & làn da>,
+  "pslEquivalent": <số thực từ 1.5 đến 8.5 quy đổi chuẩn PSL>,
+  "detectedStrengths": ["<Điểm mạnh nổi bật 1>", "<Điểm mạnh nổi bật 2>", "<Điểm mạnh nổi bật 3>"],
+  "detectedFlaws": ["<Khuyết điểm giải phẫu/da có thật nếu có, hoặc lưu ý nhỏ>"],
+  "frontScore": <số nguyên 1-100 điểm góc chính diện>,
+  "profileScore": <số nguyên 1-100 điểm góc nghiêng 90°>,
+  "ovrScore": <số nguyên 1-100 điểm OVR tổng hợp cả 2 góc>,
+  "potentialScore": <số nguyên cao hơn ovrScore từ 4 đến 14 điểm, tối đa 100>,
+  "tierCode": "<SUB 3 | SUB 5 | LTN | MTN | HTN | CHAD | STACY | TRUE ADAM | TRUE EVE>",
+  "tierLabel": "<Tên tiếng Việt tương ứng>",
+  "percentile": "<Phân vị thực tế>",
+  "archetype": "<Phân loại kiểu gương mặt thực tế 3D>",
+  "aiVerdict": "<Nhận xét công tâm, sắc sảo bằng tiếng Việt đối chiếu với Bảng Chuẩn 7 Rank (Ảnh 1) cùng cả Góc Chính Diện (Ảnh 2) lẫn Góc Nghiêng 90° (Ảnh 3)>",
+  "avgTilt": <số thực góc nghiêng mắt từ -4.0 đến +7.0>,
+  "fwhr": <số thực từ 1.45 đến 2.25>,
+  "jawToCheek": <số thực từ 0.65 đến 0.98>,
+  "symmetryPct": <số thực từ 55.0 đến 98.5>,
+  "eLineStatus": "<Chuẩn E-Line | Hơi nhô môi | Tụt nhẹ sau E-Line | Mất cân đối E-Line>",
+  "gonialAngleDeg": <số nguyên góc hàm Gonial từ 112 đến 142>,
+  "nasolabialDeg": <số nguyên góc mũi-môi từ 82 đến 115>,
+  "cervicomentalDeg": <số nguyên góc cổ-cằm từ 100 đến 145>,
+  "metrics": {
+    "eyes": <số nguyên 1-100>,
+    "jawline": <số nguyên 1-100>,
+    "symmetry": <số nguyên 1-100>,
+    "proportions": <số nguyên 1-100>,
+    "cheekbones": <số nguyên 1-100>,
+    "skin": <số nguyên 1-100>
+  },
+  "metricNotes": {
+    "eyes": "<Nhận xét vùng mắt, chân mày & độ nhô hốc mắt qua 2 góc>",
+    "jawline": "<Nhận xét xương hàm, góc Gonial, độ nhô cằm và độ săn vùng dưới hàm>",
+    "symmetry": "<Nhận xét độ đối xứng chính diện & cân đối 3 tầng mặt nghiêng>",
+    "proportions": "<Nhận xét tỷ lệ FWHR, đường E-Line, sống mũi và góc mũi–môi>",
+    "cheekbones": "<Nhận xét gò má, độ hõm dưới gò má (Ogee curve), rãnh cười và mỡ mặt>",
+    "skin": "<Nhận xét công tâm về độ sạch mịn của da, kết cấu da và vùng cổ–hàm>"
+  },
+  "detailed48": {
+    "1": [<điểm 1-100>, "<số đo ngắn>", "<nhận xét dưới 8 từ>"],
+    "2": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "3": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "4": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "5": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "6": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "7": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "8": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "9": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "10": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "11": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "12": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "13": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "14": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "15": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "16": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "17": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "18": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "19": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "20": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "21": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "22": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "23": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "24": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "25": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "26": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "27": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "28": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "29": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "30": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "31": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "32": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "33": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "34": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "35": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "36": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "37": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "38": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "39": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "40": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "41": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "42": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "43": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "44": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "45": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "46": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "47": [<điểm>, "<giá trị>", "<nhận xét ngắn>"],
+    "48": [<điểm>, "<giá trị>", "<nhận xét ngắn>"]
+  },
+  "glowUpPlan": [
+    { "title": "<Đề xuất tối ưu 1>", "priority": "Ưu tiên Cao", "gainPoints": "+4 điểm", "detail": "<Hướng dẫn thực tế>" },
+    { "title": "<Đề xuất tối ưu 2>", "priority": "Ưu tiên Trung Bình", "gainPoints": "+3 điểm", "detail": "<Hướng dẫn thực tế>" },
+    { "title": "<Đề xuất duy trì 3>", "priority": "Duy Trì", "gainPoints": "+2 điểm", "detail": "<Hướng dẫn>" }
+  ]
+}`;
+
+      const baseMessages = [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `ẢNH 1 là Bảng Chuẩn Phân Hạng 7 Cấp Độ (sub 3 → sub 5 → ltn → mtn → htn → chad → true adam). ẢNH 2 là GÓC CHÍNH DIỆN (Frontal) và ẢNH 3 là GÓC NGHIÊNG 90° (Side Profile) của người cần chấm. Tiêu chuẩn giới tính: ${genderLabel}. Hãy đối chiếu trực tiếp người ở Ảnh 2 & Ảnh 3 với 7 cấp độ trong Ảnh 1, chấm theo quy tắc 70% Khung Xương & Độ Góc Cạnh (boneStructureScore) + 30% Mô Mềm & Làn Da (softTissueAndSkinScore) để xuất ovrScore, tierCode, pslEquivalent, frontScore, profileScore và trọn bộ 48 chỉ số trong detailed48. Chỉ trả về JSON thuần hợp lệ.`,
+            },
+            {
+              type: 'image_url',
+              image_url: { url: rankChartDataUrl },
+            },
+            {
+              type: 'image_url',
+              image_url: { url: frontDataUrl },
+            },
+            {
+              type: 'image_url',
+              image_url: { url: profileDataUrl },
+            },
+          ],
+        },
+      ];
+
+      const parseAndRepairAIJson = (rawText) => {
+        if (!rawText || typeof rawText !== 'string') return null;
+        let text = rawText
+          .replace(/<think>[\s\S]*?<\/think>/gi, '')
+          .replace(/```json\s*/gi, '')
+          .replace(/```\s*/g, '')
+          .trim();
+
+        const firstBrace = text.indexOf('{');
+        if (firstBrace === -1) return null;
+        text = text.slice(firstBrace);
+
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          // Proceed to structural repair if output was truncated mid-JSON
+        }
+
+        let repaired = '';
+        let inString = false;
+        let escaped = false;
+        const stack = [];
+
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          if (inString) {
+            if (escaped) {
+              repaired += ch;
+              escaped = false;
+            } else if (ch === '\\') {
+              repaired += ch;
+              escaped = true;
+            } else if (ch === '"') {
+              repaired += ch;
+              inString = false;
+            } else if (ch === '\n' || ch === '\r') {
+              repaired += ' ';
+            } else {
+              repaired += ch;
+            }
+          } else {
+            if (ch === '"') {
+              inString = true;
+              repaired += ch;
+            } else if (ch === '{' || ch === '[') {
+              stack.push(ch);
+              repaired += ch;
+            } else if (ch === '}' || ch === ']') {
+              if (stack.length > 0) stack.pop();
+              repaired += ch;
+              if (stack.length === 0) break;
+            } else {
+              repaired += ch;
+            }
+          }
+        }
+
+        if (inString) repaired += '"';
+
+        repaired = repaired
+          .replace(/,\s*$/, '')
+          .replace(/:\s*$/, ': null')
+          .replace(/,\s*"[^"]*"\s*$/, '');
+
+        while (stack.length > 0) {
+          const open = stack.pop();
+          repaired = repaired.replace(/,\s*$/, '');
+          repaired += open === '{' ? '}' : ']';
+        }
+
+        repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+
+        try {
+          return JSON.parse(repaired);
+        } catch (e2) {
+          return null;
+        }
+      };
+
+      const lockedModel = state.lockedModel || 'openai';
+      const sameModelRetries = [
+        { model: lockedModel, useJsonFormat: true, delayMs: 0 },
+        { model: lockedModel, useJsonFormat: false, delayMs: 400 },
+      ];
+
+      let aiData = null;
+      let modelUsed = lockedModel;
+      let lastErrorMsg = `Không thể kết nối mô hình ${lockedModel}.`;
+
+      for (const attempt of sameModelRetries) {
+        if (attempt.delayMs > 0) {
+          await sleep(attempt.delayMs);
+        }
+        try {
+          const payload = {
+            model: attempt.model,
+            messages: baseMessages,
+            temperature: 0,
+            top_p: 1,
+            max_tokens: 4096,
+            seed: numericSeed,
+          };
+          if (attempt.useJsonFormat) {
+            payload.response_format = { type: 'json_object' };
+          }
+
+          const resp = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${state.pollinationsKey}`,
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!resp.ok) {
+            if (resp.status === 401) {
+              throw new Error('Secret Key không hợp lệ hoặc hết hạn (Mã 401). Hãy đăng nhập lại!');
+            }
+            if (resp.status === 402) {
+              let apiDetail = '';
+              try {
+                const errBody = await resp.json();
+                apiDetail = errBody?.error?.message || errBody?.message || '';
+              } catch (e) {
+                // Ignore non-JSON error body
+              }
+              throw new Error(
+                `Mô hình [${lockedModel}] bị từ chối (Mã 402${
+                  apiDetail ? `: ${apiDetail}` : ''
+                }). Hãy vào enter.pollinations.ai/keys mở quyền cho model "${lockedModel}" hoặc kiểm tra ngân sách của Key!`
+              );
+            }
+            lastErrorMsg = `Mô hình [${lockedModel}] đang bận (Mã ${resp.status}). Vui lòng thử lại sau vài giây!`;
+            continue;
+          }
+
+          const json = await resp.json();
+          const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+          const parsed = parseAndRepairAIJson(content);
+          if (parsed && typeof parsed === 'object' && parsed.metrics) {
+            aiData = parsed;
+            modelUsed = lockedModel;
+            break;
+          } else {
+            lastErrorMsg = `Mô hình [${lockedModel}] trả dữ liệu JSON chưa trọn vẹn. Đang thử lại cùng mô hình...`;
+          }
+        } catch (err) {
+          if (err.message && (err.message.includes('401') || err.message.includes('402'))) {
+            throw err;
+          }
+          lastErrorMsg = err.message || lastErrorMsg;
+        }
+      }
+
+      if (!aiData) {
+        throw new Error(lastErrorMsg || `Mô hình [${lockedModel}] không phản hồi hợp lệ. Vui lòng thử lại!`);
+      }
+
+      const m = aiData.metrics || {};
+      const notes = aiData.metricNotes || {};
+      const eyeScore = Math.round(clamp(Number(m.eyes) || 55, 1, 100));
+      const jawlineScore = Math.round(clamp(Number(m.jawline) || 52, 1, 100));
+      const symmetryScore = Math.round(clamp(Number(m.symmetry) || 56, 1, 100));
+      const proportionScore = Math.round(clamp(Number(m.proportions) || 55, 1, 100));
+      const cheekbonesScore = Math.round(clamp(Number(m.cheekbones) || 54, 1, 100));
+      const skinScore = Math.round(clamp(Number(m.skin) || 54, 1, 100));
+
+      const weightedAvg = Math.round(
+        eyeScore * 0.22 +
+          jawlineScore * 0.26 +
+          symmetryScore * 0.12 +
+          proportionScore * 0.18 +
+          cheekbonesScore * 0.1 +
+          skinScore * 0.12
+      );
+
+      const boneStructureScore = Math.round(
+        clamp(
+          Number(aiData.boneStructureScore) ||
+            Math.round(jawlineScore * 0.36 + eyeScore * 0.28 + proportionScore * 0.22 + cheekbonesScore * 0.14),
+          1,
+          100
+        )
+      );
+      const softTissueAndSkinScore = Math.round(
+        clamp(Number(aiData.softTissueAndSkinScore) || Math.round(skinScore * 0.65 + symmetryScore * 0.35), 1, 100)
+      );
+      const structuralComposite = Math.round(boneStructureScore * 0.7 + softTissueAndSkinScore * 0.3);
+
+      let frontScore = Math.round(clamp(Number(aiData.frontScore) || weightedAvg, 1, 100));
+      let profileScore = Math.round(clamp(Number(aiData.profileScore) || Math.round((jawlineScore + proportionScore) / 2), 1, 100));
+      let overallScore = Math.round(
+        clamp(
+          Number(aiData.ovrScore) ||
+            Number(aiData.overallScore) ||
+            Math.round(structuralComposite * 0.6 + (frontScore * 0.52 + profileScore * 0.48) * 0.4),
+          1,
+          100
+        )
+      );
+
+      if (Math.abs(overallScore - structuralComposite) > 4) {
+        overallScore = Math.round(overallScore * 0.45 + structuralComposite * 0.55);
+      }
+
+      const minCritical = Math.min(jawlineScore, proportionScore, skinScore);
+      if (minCritical < 40 && overallScore > minCritical + 14) {
+        overallScore = minCritical + 14;
+      }
+
+      const computedPsl = Number((1.5 + (overallScore / 100) * 7.0).toFixed(1));
+      const pslEquivalent = Number(clamp(Number(aiData.pslEquivalent) || computedPsl, 1.5, 8.5).toFixed(1));
+      const angularityLevel =
+        aiData.angularityLevel ||
+        (boneStructureScore >= 82
+          ? 'Cực kỳ góc cạnh (Model-tier)'
+          : boneStructureScore >= 72
+          ? 'Góc cạnh sắc nét'
+          : boneStructureScore >= 60
+          ? 'Hài hòa gọn gàng'
+          : 'Mềm mại trung bình');
+
+      const potentialScore = Math.round(
+        clamp(Number(aiData.potentialScore) || Math.min(100, overallScore + 9), overallScore, 100)
+      );
+      const fallbackTier = classifyScoreTier(overallScore, state.gender);
+      const tierCode = aiData.tierCode || fallbackTier.code;
+      const tierLabel = aiData.tierLabel || fallbackTier.label;
+
+      const avgTilt = Number(clamp(Number(aiData.avgTilt) || 1.2, -5.0, 8.0).toFixed(1));
+      const fwhr = Number(clamp(Number(aiData.fwhr) || 1.82, 1.35, 2.35).toFixed(2));
+      const jawToCheek = Number(clamp(Number(aiData.jawToCheek) || 0.78, 0.6, 1.02).toFixed(2));
+      const symmetryPct = Number(clamp(Number(aiData.symmetryPct) || 88.5, 50.0, 99.0).toFixed(1));
+      const eLineStatus = aiData.eLineStatus || 'Chuẩn E-Line';
+      const gonialAngleDeg = Math.round(clamp(Number(aiData.gonialAngleDeg) || 124, 108, 148));
+      const nasolabialDeg = Math.round(clamp(Number(aiData.nasolabialDeg) || 96, 78, 120));
+      const cervicomentalDeg = Math.round(clamp(Number(aiData.cervicomentalDeg) || 115, 95, 150));
+
+      const pillars = [
+        {
+          key: 'eyes',
+          name: 'Đôi Mắt, Hốc Mắt & Chân Mày',
+          subValue: `Canthal Tilt ${avgTilt >= 0 ? '+' : ''}${avgTilt}°`,
+          score: eyeScore,
+          color: '#FF6B00',
+          desc: notes.eyes || 'Đánh giá độ nghiêng khóe mắt, độ sâu hốc mắt, độ lộ mí và gờ chân mày.',
+        },
+        {
+          key: 'jawline',
+          name: 'Xương Hàm & Góc Gonial',
+          subValue: `Góc hàm ~${gonialAngleDeg}° • Chính diện ${frontScore}đ`,
+          score: jawlineScore,
+          color: '#FB923C',
+          desc: notes.jawline || 'Đánh giá độ sắc nét cạnh hàm dưới, độ nhô cằm và nọng dưới hàm từ 2 góc.',
+        },
+        {
+          key: 'proportions',
+          name: 'E-Line, Sống Mũi & Tỷ Lệ',
+          subValue: `${eLineStatus} • FWHR ${fwhr}`,
+          score: proportionScore,
+          color: '#FBBF24',
+          desc: notes.proportions || 'Đánh giá đường thẩm mỹ E-Line, góc mũi–môi, sống mũi và tỷ lệ khung mặt.',
+        },
+        {
+          key: 'symmetry',
+          name: 'Độ Đối Xứng & 3 Tầng Mặt',
+          subValue: `Đối xứng ${symmetryPct}%`,
+          score: symmetryScore,
+          color: '#F59E0B',
+          desc: notes.symmetry || 'Đánh giá độ cân xứng hai bên chính diện và tỷ lệ 1/3 khuôn mặt góc nghiêng.',
+        },
+        {
+          key: 'cheekbones',
+          name: 'Gò Má & Tầng Giữa',
+          subValue: `Tỷ lệ hàm/gò má ${jawToCheek}`,
+          score: cheekbonesScore,
+          color: '#10B981',
+          desc: notes.cheekbones || 'Đánh giá chiều cao gò má, độ hõm dưới gò má, rãnh cười và mỡ mặt.',
+        },
+        {
+          key: 'skin',
+          name: 'Làn Da, Cổ–Hàm & Tóc',
+          subValue: `Góc cổ–cằm ~${cervicomentalDeg}°`,
+          score: skinScore,
+          color: '#F43F5E',
+          desc: notes.skin || 'Đánh giá độ mịn bề mặt da, mụn viêm, độ săn vùng cổ–hàm và đường chân tóc.',
+        },
+      ];
+
+      const pillarScoreMap = {
+        eyes: eyeScore,
+        jawline: jawlineScore,
+        symmetry: symmetryScore,
+        proportions: proportionScore,
+        cheekbones: cheekbonesScore,
+        skin: skinScore,
+      };
+      const rawDetailed48 = aiData.detailed48 || {};
+      const detailed48Items = METRIC_48_CATALOG.map((item) => {
+        const entry = rawDetailed48[String(item.id)] || rawDetailed48[item.name];
+        const baseScore = pillarScoreMap[item.pillar] || overallScore;
+        let itemScore = baseScore;
+        let itemValue = item.defaultVal;
+        let itemNote = `Đánh giá cấu trúc ${item.name.toLowerCase()} qua 2 góc ở mức ${
+          baseScore >= 70 ? 'hài hòa' : baseScore >= 55 ? 'trung bình' : 'cần cải thiện'
+        }.`;
+
+        if (Array.isArray(entry)) {
+          itemScore = Math.round(clamp(Number(entry[0]) || baseScore, 1, 100));
+          if (entry[1]) itemValue = String(entry[1]);
+          if (entry[2]) itemNote = String(entry[2]);
+        } else if (entry && typeof entry === 'object') {
+          itemScore = Math.round(clamp(Number(entry.score) || baseScore, 1, 100));
+          if (entry.value) itemValue = String(entry.value);
+          if (entry.note) itemNote = String(entry.note);
+        }
+
+        return {
+          id: item.id,
+          name: item.name,
+          cat: item.cat,
+          catLabel: item.catLabel,
+          score: itemScore,
+          value: itemValue,
+          note: itemNote,
+        };
+      });
+
+      const detectedStrengths =
+        Array.isArray(aiData.detectedStrengths) && aiData.detectedStrengths.length > 0
+          ? aiData.detectedStrengths.slice(0, 4)
+          : [];
+
+      const detectedFlaws =
+        Array.isArray(aiData.detectedFlaws) && aiData.detectedFlaws.length > 0
+          ? aiData.detectedFlaws.slice(0, 4)
+          : overallScore >= 72
+          ? []
+          : ['Độ sắc nét viền hàm chưa cao', 'Kết cấu da vùng chữ T cần cải thiện'];
+
+      return {
+        isAI: true,
+        modelUsed,
+        numericSeed,
+        aiMode: state.aiMode,
+        angularityLevel,
+        boneStructureScore,
+        softTissueAndSkinScore,
+        pslEquivalent,
+        frontScore,
+        profileScore,
+        overallScore,
+        potentialScore,
+        tierCode,
+        tierLabel,
+        tierColor: fallbackTier.color,
+        archetype: aiData.archetype || 'Cấu trúc hài hòa tự nhiên 3D',
+        percentile: fallbackTier.percentile,
+        detectedStrengths,
+        detectedFlaws,
+        aiVerdict:
+          aiData.aiVerdict ||
+          'Khuôn mặt có cấu trúc tương đối hài hòa khi đối chiếu cả chính diện lẫn góc nghiêng và có dư địa cải thiện rõ rệt.',
+        avgTilt,
+        fwhr,
+        jawToCheek,
+        symmetryPct,
+        eLineStatus,
+        gonialAngleDeg,
+        nasolabialDeg,
+        cervicomentalDeg,
+        customGlowUpPlan: Array.isArray(aiData.glowUpPlan) ? aiData.glowUpPlan.slice(0, 4) : null,
+        pillars,
+        detailed48Items,
+      };
+    }
+
+    // ==================== 8. DUAL-ANGLE BIOMETRIC OVERLAY CANVAS & RADAR CHART ====================
+    function setResultCanvasView(viewAngle) {
+      state.resultViewAngle = viewAngle;
+      playTone(600, 0.05);
+      const frontTab = document.getElementById('res-tab-front');
+      const profTab = document.getElementById('res-tab-profile');
+      if (viewAngle === 'front') {
+        frontTab.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-orange-500/25 text-orange-200 transition';
+        profTab.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white transition';
+      } else {
+        profTab.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/25 text-amber-200 transition';
+        frontTab.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white transition';
+      }
+      drawBiometricOverlay();
+    }
+
+    function setOverlayMode(mode) {
+      state.overlayMode = mode;
+      playTone(620, 0.05);
+      ['ratios', 'mesh', 'none'].forEach((m) => {
+        const btn = document.getElementById(`ov-${m}`);
+        if (m === mode) {
+          btn.className = 'px-2 py-1 rounded-lg text-[11px] font-bold bg-orange-500/25 text-orange-200 transition';
+        } else {
+          btn.className = 'px-2 py-1 rounded-lg text-[11px] font-bold text-zinc-400 hover:text-white transition';
+        }
+      });
+      drawBiometricOverlay();
+    }
+
+    function drawBiometricOverlay() {
+      const canvas = document.getElementById('result-canvas');
+      const isProfileView = state.resultViewAngle === 'profile';
+      const src = isProfileView ? state.profileCanvas : state.frontCanvas;
+      if (!canvas || !src) return;
+
+      canvas.width = src.width;
+      canvas.height = src.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(src, 0, 0);
+
+      if (state.overlayMode === 'none') return;
+
+      const w = canvas.width;
+      const h = canvas.height;
+      const lm = state.landmarks;
+
+      if (isProfileView) {
+        ctx.save();
+        ctx.strokeStyle = '#FF6B00';
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(w * 0.72, h * 0.46);
+        ctx.lineTo(w * 0.66, h * 0.72);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#FBBF24';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(w * 0.44, h * 0.46);
+        ctx.lineTo(w * 0.46, h * 0.64);
+        ctx.lineTo(w * 0.66, h * 0.72);
+        ctx.stroke();
+
+        [
+          [w * 0.72, h * 0.46, '#FF6B00'],
+          [w * 0.68, h * 0.56, '#10B981'],
+          [w * 0.66, h * 0.72, '#FF6B00'],
+          [w * 0.46, h * 0.64, '#FBBF24'],
+        ].forEach(([px, py, col]) => {
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+        return;
+      }
+
+      if (lm && lm.length >= 468) {
+        ctx.save();
+        if (state.overlayMode === 'mesh') {
+          ctx.fillStyle = 'rgba(255, 107, 0, 0.6)';
+          for (let i = 0; i < lm.length; i += 2) {
+            ctx.beginPath();
+            ctx.arc(lm[i].x * w, lm[i].y * h, 1.3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          const topHead = lm[10];
+          const chin = lm[152];
+          const leftEyeOuter = lm[33];
+          const leftEyeInner = lm[133];
+          const rightEyeInner = lm[362];
+          const rightEyeOuter = lm[263];
+
+          ctx.strokeStyle = 'rgba(255, 107, 0, 0.75)';
+          ctx.lineWidth = 1.6;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.moveTo(topHead.x * w, topHead.y * h);
+          ctx.lineTo(chin.x * w, chin.y * h);
+          ctx.stroke();
+
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#10B981';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(leftEyeOuter.x * w, leftEyeOuter.y * h);
+          ctx.lineTo(leftEyeInner.x * w, leftEyeInner.y * h);
+          ctx.moveTo(rightEyeInner.x * w, rightEyeInner.y * h);
+          ctx.lineTo(rightEyeOuter.x * w, rightEyeOuter.y * h);
+          ctx.stroke();
+
+          const jawIndices = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454];
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.88)';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          jawIndices.forEach((idx, i) => {
+            const pt = lm[idx];
+            if (i === 0) ctx.moveTo(pt.x * w, pt.y * h);
+            else ctx.lineTo(pt.x * w, pt.y * h);
+          });
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 107, 0, 0.7)';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(w * 0.5, h * 0.16);
+        ctx.lineTo(w * 0.5, h * 0.84);
+        ctx.stroke();
+
+        [0.34, 0.53, 0.72].forEach((ry) => {
+          ctx.beginPath();
+          ctx.moveTo(w * 0.24, h * ry);
+          ctx.lineTo(w * 0.76, h * ry);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+    }
+
+    function renderRadarChart(pillars) {
+      const canvas = document.getElementById('radar-canvas');
+      if (!canvas) return;
+      const size = 320;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, size, size);
+
+      const cx = size / 2;
+      const cy = size / 2;
+      const maxR = 104;
+      const count = pillars.length;
+
+      for (let ring = 1; ring <= 4; ring++) {
+        const r = (maxR * ring) / 4;
+        ctx.beginPath();
+        for (let i = 0; i < count; i++) {
+          const angle = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      const shortLabels = ['Mắt & Mày', 'Hàm & Gonial', 'E-Line & Mũi', 'Đối Xứng', 'Gò Má', 'Da & Cổ'];
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (let i = 0; i < count; i++) {
+        const angle = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+        const x = cx + maxR * Math.cos(angle);
+        const y = cy + maxR * Math.sin(angle);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
+        ctx.stroke();
+
+        const lx = cx + (maxR + 28) * Math.cos(angle);
+        const ly = cy + (maxR + 22) * Math.sin(angle);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillText(shortLabels[i] || pillars[i].name, lx, ly);
+      }
+
+      ctx.beginPath();
+      pillars.forEach((p, i) => {
+        const angle = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+        const r = (clamp(p.score, 5, 100) / 100) * maxR;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255, 107, 0, 0.22)';
+      ctx.fill();
+      ctx.strokeStyle = '#FF6B00';
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+
+      pillars.forEach((p, i) => {
+        const angle = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+        const r = (clamp(p.score, 5, 100) / 100) * maxR;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.color || '#FF6B00';
+        ctx.fill();
+      });
+    }
+
+    // ==================== 9. RENDER RESULTS, 48 METRICS & GLOW-UP PLAN ====================
+    function renderResults(res) {
+      const badge = document.getElementById('landmark-badge');
+      badge.textContent = state.isRealMediaPipe
+        ? '● 468 ĐIỂM MỐC + E-LINE 90°'
+        : '● LƯỚI NHÂN TRẮC HỌC 2 GÓC';
+
+      const consistencyBadge = document.getElementById('consistency-badge');
+      consistencyBadge.textContent = res.fromCache
+        ? `🔒 Đồng bộ nhất quán (${res.modelUsed || 'openai'})`
+        : `🔒 Khóa 1 AI: ${res.modelUsed || 'openai'} • Seed #${res.numericSeed || ''}`;
+
+      state.resultViewAngle = 'front';
+      setResultCanvasView('front');
+
+      const strip = document.getElementById('telemetry-strip');
+      strip.innerHTML = `
+        <div class="rounded-xl bg-black/75 border border-white/10 p-2">
+          <div class="text-[10px] text-zinc-400">Canthal Tilt</div>
+          <div class="font-mono text-xs font-bold text-orange-300">${res.avgTilt >= 0 ? '+' : ''}${res.avgTilt}°</div>
+        </div>
+        <div class="rounded-xl bg-black/75 border border-white/10 p-2">
+          <div class="text-[10px] text-zinc-400">Đường E-Line</div>
+          <div class="font-mono text-xs font-bold text-emerald-300 truncate">${res.eLineStatus}</div>
+        </div>
+        <div class="rounded-xl bg-black/75 border border-white/10 p-2">
+          <div class="text-[10px] text-zinc-400">Góc Gonial</div>
+          <div class="font-mono text-xs font-bold text-amber-300">~${res.gonialAngleDeg}°</div>
+        </div>
+        <div class="rounded-xl bg-black/75 border border-white/10 p-2">
+          <div class="text-[10px] text-zinc-400">Chỉ số FWHR</div>
+          <div class="font-mono text-xs font-bold text-orange-200">${res.fwhr}</div>
+        </div>
+      `;
+
+      const ring = document.getElementById('score-ring-circle');
+      const circumference = 326.72;
+      const offset = circumference - (res.overallScore / 100) * circumference;
+      ring.style.stroke = res.tierColor;
+      setTimeout(() => {
+        ring.style.strokeDashoffset = offset.toFixed(1);
+      }, 60);
+
+      document.getElementById('overall-score-num').textContent = res.overallScore;
+      const tierBadge = document.getElementById('tier-badge');
+      tierBadge.textContent = `OVR: ${res.tierCode} • ${res.tierLabel}`;
+      tierBadge.style.color = res.tierColor;
+      tierBadge.style.borderColor = res.tierColor;
+
+      const pslBadge = document.getElementById('psl-equivalent-badge');
+      if (pslBadge) {
+        const pslVal = res.pslEquivalent || (1.5 + (res.overallScore / 100) * 7.0).toFixed(1);
+        pslBadge.textContent = `PSL ${pslVal} / 8.5`;
+      }
+
+      const angBadge = document.getElementById('angularity-badge');
+      if (angBadge) {
+        angBadge.textContent = `Độ góc cạnh: ${res.angularityLevel || 'Hài hòa gọn gàng'}`;
+      }
+
+      const splitBadge = document.getElementById('bone-soft-split');
+      if (splitBadge) {
+        const bonePts = res.boneStructureScore || res.overallScore;
+        const softPts = res.softTissueAndSkinScore || res.overallScore;
+        splitBadge.textContent = `Khung xương (70%): ${bonePts}đ • Mô mềm & Da (30%): ${softPts}đ`;
+      }
+
+      document.getElementById('mode-angle-badge').textContent = `2 Góc • ${
+        res.aiMode === 'roast' ? 'Roast Gắt 🔥' : 'Chuẩn Thực Tế'
+      } • Khóa AI: ${res.modelUsed || 'openai'}`;
+
+      document.getElementById('archetype-text').textContent = `Kiểu gương mặt: ${res.archetype}`;
+      document.getElementById('front-subscore-text').textContent = `${res.frontScore}/100`;
+      document.getElementById('profile-subscore-text').textContent = `${res.profileScore}/100`;
+      document.getElementById('percentile-text').textContent = res.percentile;
+      document.getElementById('potential-text').textContent = `${res.potentialScore}/100`;
+      document.getElementById('ai-verdict-text').textContent = res.aiVerdict;
+
+      const strengthsContainer = document.getElementById('detected-strengths-list');
+      strengthsContainer.innerHTML = (res.detectedStrengths || [])
+        .map(
+          (s) => `
+          <span class="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-semibold text-emerald-200">
+            ✦ ${s}
+          </span>
+        `
+        )
+        .join('');
+
+      const flawsContainer = document.getElementById('detected-flaws-list');
+      flawsContainer.innerHTML = (res.detectedFlaws || [])
+        .map(
+          (f) => `
+          <span class="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-400/30 text-[11px] font-semibold text-rose-200">
+            ⚠️ ${f}
+          </span>
+        `
+        )
+        .join('');
+
+      renderRadarChart(res.pillars);
+      const grid = document.getElementById('metrics-grid');
+      grid.innerHTML = res.pillars
+        .map(
+          (p) => `
+          <div class="rounded-2xl bg-slate-950/70 border border-white/10 p-3.5 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="text-xs font-extrabold text-white">${p.name}</div>
+                <div class="text-[10px] font-mono text-slate-400">${p.subValue}</div>
+              </div>
+              <span class="font-mono text-sm font-black" style="color: ${p.color}">${p.score}/100</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div class="h-full rounded-full" style="width: ${p.score}%; background-color: ${p.color}"></div>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">${p.desc}</p>
+          </div>
+        `
+        )
+        .join('');
+
+      state.activeMetricCategory = 'all';
+      state.showFlawsOnly = false;
+      render48MetricsGrid();
+      renderGlowUpPlan(res);
+    }
+
+    function setMetricCategory(cat) {
+      state.activeMetricCategory = cat;
+      playTone(600, 0.05);
+      document.querySelectorAll('.cat-pill').forEach((btn) => {
+        const isSelected = btn.getAttribute('data-cat') === cat;
+        btn.className = isSelected
+          ? 'cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-500/25 text-orange-200 border border-orange-500/45 transition'
+          : 'cat-pill px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-zinc-400 hover:text-white border border-white/10 transition';
+      });
+      render48MetricsGrid();
+    }
+
+    function toggleFlawsOnly() {
+      state.showFlawsOnly = !state.showFlawsOnly;
+      playTone(580, 0.05);
+      const btn = document.getElementById('btn-flaws-only');
+      btn.className = state.showFlawsOnly
+        ? 'self-start sm:self-auto px-3 py-1.5 rounded-xl bg-rose-500/30 border border-rose-400 text-white text-xs font-bold transition'
+        : 'self-start sm:self-auto px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-bold transition';
+      render48MetricsGrid();
+    }
+
+    function render48MetricsGrid() {
+      const res = state.analysisResult;
+      const container = document.getElementById('metrics-48-grid');
+      const countEl = document.getElementById('metrics-48-count');
+      if (!res || !container) return;
+
+      let items = res.detailed48Items || [];
+      if (state.activeMetricCategory !== 'all') {
+        items = items.filter((it) => it.cat === state.activeMetricCategory);
+      }
+      if (state.showFlawsOnly) {
+        items = items.filter((it) => it.score < 60);
+      }
+
+      countEl.textContent = `Đang hiển thị ${items.length} / 48 chỉ số`;
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full text-center py-6 text-xs text-slate-400">
+            Không có chỉ số nào dưới 60 điểm trong nhóm này ✨
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = items
+        .map((m) => {
+          const scoreColor =
+            m.score >= 70 ? '#10B981' : m.score >= 55 ? '#FF6B00' : m.score >= 45 ? '#FBBF24' : '#F43F5E';
+          return `
+            <div class="rounded-2xl bg-black/75 border border-white/10 p-3 space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="text-[10px] font-mono text-zinc-500">#${m.id}</span>
+                  <span class="text-xs font-bold text-white truncate">${m.name}</span>
+                </div>
+                <span class="font-mono text-xs font-black flex-shrink-0" style="color: ${scoreColor}">${m.score}/100</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] font-mono">
+                <span class="text-zinc-400">${m.catLabel}</span>
+                <span class="text-orange-300 font-semibold">${m.value}</span>
+              </div>
+              <div class="w-full h-1 rounded-full bg-white/10 overflow-hidden">
+                <div class="h-full rounded-full" style="width: ${m.score}%; background-color: ${scoreColor}"></div>
+              </div>
+              <p class="text-[11px] text-zinc-300 leading-snug">${m.note}</p>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    function renderGlowUpPlan(res) {
+      const container = document.getElementById('glowup-list');
+      if (!container) return;
+
+      const plan =
+        res.customGlowUpPlan && res.customGlowUpPlan.length > 0
+          ? res.customGlowUpPlan
+          : [
+              {
+                title: 'Giảm mỡ mặt & siết gọn vùng cổ–hàm',
+                priority: 'Ưu tiên Cao',
+                gainPoints: '+7 điểm',
+                detail: 'Kiểm soát lượng muối/đường, duy trì tư thế lưỡi chạm vòm miệng (Mewing) và cardio đều để lộ góc Gonial.',
+              },
+              {
+                title: 'Phục hồi hàng rào da & xử lý thâm mụn',
+                priority: 'Ưu tiên Cao',
+                gainPoints: '+6 điểm',
+                detail: 'Làm sạch dịu nhẹ, dùng hoạt chất BHA/Niacinamide và chống nắng mỗi ngày để tăng độ trong của da.',
+              },
+              {
+                title: 'Tối ưu kiểu tóc & định hình chân mày',
+                priority: 'Ưu tiên Trung Bình',
+                gainPoints: '+4 điểm',
+                detail: 'Chọn kiểu tóc tạo độ phồng đỉnh đầu, gọn hai bên mai và tỉa gọn chân mày để tăng tỷ lệ khung mặt.',
+              },
+            ];
+
+      container.innerHTML = plan
+        .map(
+          (step, idx) => `
+          <div class="rounded-2xl bg-black/75 border border-white/10 p-4 flex items-start gap-3">
+            <div class="w-7 h-7 rounded-xl bg-orange-500/15 border border-orange-500/35 text-orange-300 font-mono text-xs font-black flex items-center justify-center flex-shrink-0">
+              0${idx + 1}
+            </div>
+            <div class="flex-1 space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h4 class="text-xs sm:text-sm font-extrabold text-white">${step.title}</h4>
+                <div class="flex items-center gap-1.5">
+                  <span class="px-2 py-0.5 rounded-md bg-white/10 text-[10px] font-bold text-zinc-300">${step.priority}</span>
+                  <span class="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-[10px] font-mono font-bold text-emerald-300">
+                    ${step.gainPoints}
+                  </span>
+                </div>
+              </div>
+              <p class="text-xs text-zinc-300 leading-relaxed">${step.detail}</p>
+            </div>
+          </div>
+        `
+        )
+        .join('');
+    }
+
+    // ==================== 10. CLIPBOARD & PNG SCORE CARD EXPORT ====================
+    function copySummaryText() {
+      const res = state.analysisResult;
+      if (!res) return;
+      const pslVal = res.pslEquivalent || (1.5 + (res.overallScore / 100) * 7.0).toFixed(1);
+      const detailLine = `• Quy đổi PSL: ${pslVal} / 8.5 | Độ góc cạnh: ${res.angularityLevel || 'Hài hòa'}\n• Khung xương (70%): ${
+        res.boneStructureScore || res.overallScore
+      }/100 | Mô mềm & Da (30%): ${res.softTissueAndSkinScore || res.overallScore}/100\n• Chính diện: ${
+        res.frontScore
+      }/100 | Góc nghiêng 90°: ${res.profileScore}/100\n• Canthal Tilt: ${
+        res.avgTilt >= 0 ? '+' : ''
+      }${res.avgTilt}° | E-Line: ${res.eLineStatus} | Góc Gonial: ~${res.gonialAngleDeg}° | FWHR: ${res.fwhr}`;
+      const top48Lines = (res.detailed48Items || [])
+        .map((m) => `  - ${m.name}: ${m.score}/100 (${m.value})`)
+        .join('\n');
+      const text = `✨ GLOWMAX AI — KẾT QUẢ CHẤM ĐIỂM OVR 2 GÓC & 48 CHỈ SỐ ✨\n• Điểm OVR Tổng Hợp: ${res.overallScore} / 100 (${res.tierCode} — ${res.tierLabel})\n• Phân vị: ${res.percentile} | Tiềm năng OVR: ${res.potentialScore} / 100\n${detailLine}\n\n📊 CHI TIẾT 48 CHỈ SỐ:\n${top48Lines}`;
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = text;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+
+      playTone(720, 0.1);
+      showToast('Đã sao chép điểm OVR & trọn bộ 48 chỉ số vào khay nhớ tạm!', '📋');
+    }
+
+    function exportResultCard() {
+      const res = state.analysisResult;
+      if (!res || !state.frontCanvas || !state.profileCanvas) return;
+
+      const exp = document.getElementById('share-export-canvas');
+      const ctx = exp.getContext('2d');
+
+      ctx.fillStyle = '#050507';
+      ctx.fillRect(0, 0, 900, 1200);
+
+      ctx.fillStyle = '#FF6B00';
+      ctx.font = 'bold 28px Inter, sans-serif';
+      ctx.fillText('GLOWMAX AI • COSMIC DUAL-ANGLE OVR REPORT', 50, 65);
+
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = '20px JetBrains Mono, monospace';
+      ctx.fillText('HỢP NHẤT CHÍNH DIỆN + GÓC NGHIÊNG 90° • THANG ĐIỂM 100', 50, 98);
+
+      ctx.drawImage(state.frontCanvas, 50, 130, 195, 260);
+      ctx.drawImage(state.profileCanvas, 255, 130, 195, 260);
+
+      ctx.fillStyle = '#0d0c11';
+      ctx.fillRect(50, 405, 400, 225);
+      ctx.strokeStyle = 'rgba(249, 115, 22, 0.25)';
+      ctx.strokeRect(50, 405, 400, 225);
+
+      ctx.fillStyle = '#FF6B00';
+      ctx.font = 'bold 20px Inter, sans-serif';
+      ctx.fillText(`Chính Diện: ${res.frontScore} / 100`, 70, 448);
+
+      ctx.fillStyle = '#FBBF24';
+      ctx.fillText(`Góc Nghiêng 90°: ${res.profileScore} / 100`, 70, 488);
+
+      ctx.fillStyle = '#d4d4d8';
+      ctx.font = '18px JetBrains Mono, monospace';
+      ctx.fillText(`Canthal Tilt: ${res.avgTilt >= 0 ? '+' : ''}${res.avgTilt}°`, 70, 532);
+      ctx.fillText(`Đường E-Line: ${res.eLineStatus}`, 70, 566);
+      ctx.fillText(`Góc hàm Gonial: ~${res.gonialAngleDeg}°`, 70, 600);
+
+      ctx.fillStyle = '#0d0c11';
+      ctx.fillRect(475, 130, 375, 500);
+      ctx.strokeStyle = '#FF6B00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(475, 130, 375, 500);
+
+      ctx.fillStyle = '#FF6B00';
+      ctx.font = 'bold 22px JetBrains Mono, monospace';
+      ctx.fillText('ĐIỂM OVR TỔNG HỢP', 505, 175);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 92px JetBrains Mono, monospace';
+      ctx.fillText(`${res.overallScore}`, 505, 265);
+
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = 'bold 26px JetBrains Mono, monospace';
+      ctx.fillText('/ 100', 655, 265);
+
+      ctx.fillStyle = res.tierColor || '#FF6B00';
+      ctx.font = 'bold 24px Inter, sans-serif';
+      const pslCardVal = res.pslEquivalent || (1.5 + (res.overallScore / 100) * 7.0).toFixed(1);
+      ctx.fillText(`${res.tierCode} (PSL ${pslCardVal})`, 505, 320);
+
+      ctx.fillStyle = '#d4d4d8';
+      ctx.font = '19px Inter, sans-serif';
+      ctx.fillText(`Phân vị: ${res.percentile}`, 505, 365);
+      ctx.fillText(`Tiềm năng OVR: ${res.potentialScore} / 100`, 505, 402);
+
+      let py = 458;
+      res.pillars.slice(0, 5).forEach((p) => {
+        ctx.fillStyle = '#a1a1aa';
+        ctx.font = '17px Inter, sans-serif';
+        ctx.fillText(p.name, 505, py);
+        ctx.fillStyle = '#FF6B00';
+        ctx.font = 'bold 17px JetBrains Mono, monospace';
+        ctx.fillText(`${p.score}/100`, 765, py);
+        py += 34;
+      });
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px Inter, sans-serif';
+      ctx.fillText('TÓM TẮT CÁC CHỈ SỐ SINH TRẮC HỌC NỔI BẬT (48 CHỈ SỐ):', 50, 685);
+
+      const sampleMetrics = (res.detailed48Items || []).filter((_, i) => i % 4 === 0).slice(0, 12);
+      sampleMetrics.forEach((m, idx) => {
+        const col = idx % 2;
+        const row = Math.floor(idx / 2);
+        const mx = 50 + col * 415;
+        const my = 735 + row * 68;
+
+        ctx.fillStyle = '#0d0c11';
+        ctx.fillRect(mx, my - 32, 390, 52);
+        ctx.fillStyle = '#e4e4e7';
+        ctx.font = 'bold 18px Inter, sans-serif';
+        ctx.fillText(`#${m.id} ${m.name}`, mx + 14, my);
+
+        ctx.fillStyle = '#FF6B00';
+        ctx.font = 'bold 18px JetBrains Mono, monospace';
+        ctx.fillText(`${m.score}/100`, mx + 300, my);
+      });
+
+      const link = document.createElement('a');
+      link.download = `GlowMax_OVR_${res.overallScore}pts.png`;
+      link.href = exp.toDataURL('image/png');
+      link.click();
+      playTone(820, 0.12);
+      showToast('Đã tải thẻ kết quả OVR 2 góc (.PNG) về máy!', '⬇️');
+    }
+
+    // Boot Application
+    window.addEventListener('DOMContentLoaded', () => {
+      const sel = document.getElementById('locked-model-select');
+      if (sel && state.lockedModel) {
+        sel.value = state.lockedModel;
+      }
+      const chartImg = document.getElementById('rank-chart-preview-img');
+      if (chartImg) {
+        chartImg.src = buildRankReferenceChartDataUrl();
+      }
+      initAuthSession();
+    });
+  </script>
+</body>
+</html>
